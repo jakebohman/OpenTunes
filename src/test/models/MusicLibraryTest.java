@@ -1,4 +1,4 @@
-package com.spotify.clone.models;
+package models;
 
 import java.util.List;
 

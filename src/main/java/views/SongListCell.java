@@ -1,6 +1,7 @@
-package com.spotify.clone.views;
+package views;
 
-import com.spotify.clone.models.Song;
+import models.Song;
+
 import javafx.scene.control.ListCell;
 
 /**

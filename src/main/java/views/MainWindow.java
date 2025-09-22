@@ -1,19 +1,10 @@
-package com.spotify.clone.views;
+package views;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
-import com.spotify.clone.controllers.AudioPlayer;
-import com.spotify.clone.models.MusicLibrary;
-import com.spotify.clone.models.Playlist;
-import com.spotify.clone.models.Song;
-import com.spotify.clone.utils.ConfigManager;
-import com.spotify.clone.utils.ImportResult;
-import com.spotify.clone.utils.MusicImporter;
-import com.spotify.clone.utils.MusicLibraryIO;
-import com.spotify.clone.utils.PlaylistIO;
-
+import controllers.AudioPlayer;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -22,7 +13,9 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.Menu;
@@ -43,15 +36,26 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import models.Album;
+import models.Artist;
+import models.MusicLibrary;
+import models.Playlist;
+import models.Song;
+import utils.ConfigManager;
+import utils.ImportResult;
+import utils.MusicImporter;
+import utils.MusicLibraryIO;
+import utils.PlaylistIO;
 
 /**
  * Main window for the Spotify clone application
  */
 public class MainWindow {
+
     private Stage primaryStage;
     private MusicLibrary musicLibrary;
     private AudioPlayer audioPlayer;
-    
+
     // UI Components
     private ListView<Song> songListView;
     private ListView<Playlist> playlistListView;
@@ -63,13 +67,15 @@ public class MainWindow {
     private Button stopButton;
     private Button previousButton;
     private Button nextButton;
+    private Button loopButton;
     private TextField searchField;
-    
+
     // Current state
     private Playlist currentPlaylist;
     private int currentSongIndex = -1;
     private boolean isSeeking = false;
-    
+    private boolean loopCurrent = false;
+
     public MainWindow(Stage primaryStage) {
         this.primaryStage = primaryStage;
         this.musicLibrary = MusicLibrary.getInstance();
@@ -89,28 +95,49 @@ public class MainWindow {
         setupAudioPlayerListeners();
         initializeUI();
     }
-    
+
     private void initializeUI() {
-        primaryStage.setTitle("Spotify Clone");
-        
+        primaryStage.setTitle("OpenTunes");
+
         // Create main layout
         BorderPane mainLayout = new BorderPane();
-        
+
         // Create menu bar
         MenuBar menuBar = createMenuBar();
         mainLayout.setTop(menuBar);
-        
+
         // Create center content (split between library and playlists)
         SplitPane centerPane = createCenterPane();
         mainLayout.setCenter(centerPane);
-        
+
         // Create bottom controls
         VBox bottomControls = createBottomControls();
         mainLayout.setBottom(bottomControls);
-        
+
         // Create scene
         Scene scene = new Scene(mainLayout, 1200, 800);
+
+        // Load css
+        try {
+            scene.getStylesheets().add(getClass().getResource("/style.css").toExternalForm());
+        } catch (Exception ignored) {
+        }
         primaryStage.setScene(scene);
+        // Scene-level accelerators (playback controls)
+        try {
+            scene.getAccelerators().put(
+                    javafx.scene.input.KeyCombination.keyCombination("CTRL+SPACE"),
+                    () -> togglePlayPause());
+
+            scene.getAccelerators().put(
+                    javafx.scene.input.KeyCombination.keyCombination("CTRL+RIGHT"),
+                    () -> playNext());
+
+            scene.getAccelerators().put(
+                    javafx.scene.input.KeyCombination.keyCombination("CTRL+LEFT"),
+                    () -> playPrevious());
+        } catch (Exception ignored) {
+        }
         // On close, persist library and playlists and save config
         primaryStage.setOnCloseRequest(evt -> {
             try {
@@ -145,64 +172,167 @@ public class MainWindow {
         });
         primaryStage.show();
     }
-    
+
     private MenuBar createMenuBar() {
         MenuBar menuBar = new MenuBar();
-        
+        menuBar.getStyleClass().add("menu-bar");
+
         // File menu
         Menu fileMenu = new Menu("File");
         MenuItem importItem = new MenuItem("Import Music...");
         importItem.setOnAction(e -> importMusic());
+        importItem.setAccelerator(javafx.scene.input.KeyCombination.keyCombination("CTRL+I"));
+        importItem.setId("menu-import");
         MenuItem exitItem = new MenuItem("Exit");
         exitItem.setOnAction(e -> Platform.exit());
+        exitItem.setAccelerator(javafx.scene.input.KeyCombination.keyCombination("CTRL+Q"));
         fileMenu.getItems().addAll(importItem, new SeparatorMenuItem(), exitItem);
-        
+
         // Playlist menu
         Menu playlistMenu = new Menu("Playlist");
         MenuItem newPlaylistItem = new MenuItem("New Playlist...");
         newPlaylistItem.setOnAction(e -> createNewPlaylist());
+        newPlaylistItem.setAccelerator(javafx.scene.input.KeyCombination.keyCombination("CTRL+N"));
+        newPlaylistItem.setId("menu-new-playlist");
         playlistMenu.getItems().add(newPlaylistItem);
-        
+
         // Help menu
         Menu helpMenu = new Menu("Help");
         MenuItem aboutItem = new MenuItem("About");
         aboutItem.setOnAction(e -> showAbout());
+        aboutItem.setAccelerator(javafx.scene.input.KeyCombination.keyCombination("F1"));
         helpMenu.getItems().add(aboutItem);
-        
+
         menuBar.getMenus().addAll(fileMenu, playlistMenu, helpMenu);
         return menuBar;
     }
-    
+
     private SplitPane createCenterPane() {
         SplitPane splitPane = new SplitPane();
-        
+
         // Left side - Music Library
         VBox libraryPane = createLibraryPane();
-        
+
         // Right side - Playlists
         VBox playlistPane = createPlaylistPane();
-        
+
         splitPane.getItems().addAll(libraryPane, playlistPane);
         splitPane.setDividerPositions(0.7);
-        
+
         return splitPane;
     }
-    
+
     private VBox createLibraryPane() {
         VBox libraryPane = new VBox(10);
         libraryPane.setPadding(new Insets(10));
-        
+
         // Search bar
         searchField = new TextField();
         searchField.setPromptText("Search songs, artists, albums...");
+        searchField.setAccessibleText("Search songs, artists, albums");
         searchField.textProperty().addListener((obs, oldText, newText) -> performSearch(newText));
-        
+
         // Songs list
         Label songsLabel = new Label("Songs");
-        songsLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
-        
+        songsLabel.getStyleClass().add("section-label");
+        songsLabel.setLabelFor(songListView);
+
         songListView = new ListView<>();
-        songListView.setCellFactory(listView -> new SongListCell());
+        songListView.setCellFactory(listView -> {
+            SongListCell cell = new SongListCell();
+            ContextMenu menu = new ContextMenu();
+            MenuItem edit = new MenuItem("Edit Metadata");
+            edit.setOnAction(e -> {
+                Song s = cell.getItem();
+                if (s != null) {
+                    editSongMetadata(s);
+                }
+            });
+
+            MenuItem addTo = new MenuItem("Add to Playlist...");
+            addTo.setOnAction(e -> {
+                Song s = cell.getItem();
+                if (s != null) {
+                    addSongToPlaylist(s);
+                }
+            });
+
+            MenuItem remove = new MenuItem("Remove from playlist...");
+            remove.setOnAction(e -> {
+                Song s = cell.getItem();
+                if (s == null) {
+                    return;
+                }
+
+                // Only show playlists that actually contain this song (mirrors Add to Playlist flow)
+                List<Playlist> allPlaylists = musicLibrary.getAllPlaylists();
+                if (allPlaylists == null || allPlaylists.isEmpty()) {
+                    return;
+                }
+                List<Playlist> containing = new java.util.ArrayList<>();
+                for (Playlist p : allPlaylists) {
+                    if (p.getSongs().contains(s)) {
+                        containing.add(p);
+                    }
+                }
+                if (containing.isEmpty()) {
+                    Alert info = new Alert(Alert.AlertType.INFORMATION);
+                    info.setTitle("Not Found");
+                    info.setHeaderText("Song not in any playlist");
+                    info.setContentText("This song isn't present in any playlist.");
+                    info.showAndWait();
+                    return;
+                }
+                ChoiceDialog<Playlist> dialog = new ChoiceDialog<>(containing.contains(currentPlaylist) ? currentPlaylist : containing.get(0), containing);
+                dialog.setTitle("Remove from Playlist");
+                dialog.setHeaderText("Choose a playlist to remove the song from");
+                dialog.setContentText("Playlist:");
+                dialog.showAndWait().ifPresent(chosen -> {
+                    if (chosen == null) {
+                        return;
+                    }
+                    if (!chosen.getSongs().contains(s)) {
+                        // Inform user the song isn't in that playlist
+                        Alert info = new Alert(Alert.AlertType.INFORMATION);
+                        info.setTitle("Not Found");
+                        info.setHeaderText("Song not in playlist");
+                        info.setContentText("The selected playlist '" + chosen.getName() + "' does not contain this song.");
+                        info.showAndWait();
+                        return;
+                    }
+                    // Confirm removal
+                    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                    confirm.setTitle("Remove Song");
+                    confirm.setHeaderText("Remove '" + s.getTitle() + "' from playlist '" + chosen.getName() + "'");
+                    confirm.setContentText("Are you sure?");
+                    confirm.showAndWait().ifPresent(bt -> {
+                        if (bt.getButtonData().isDefaultButton()) {
+                            chosen.removeSong(s);
+                            try {
+                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                            } catch (IOException ex) {
+                                Alert err = new Alert(Alert.AlertType.ERROR);
+                                err.setTitle("Save Error");
+                                err.setHeaderText("Failed to persist playlists");
+                                err.setContentText(ex.getMessage());
+                                err.showAndWait();
+                            }
+                            // If the user is viewing the playlist we removed from, reload it
+                            if (currentPlaylist != null && currentPlaylist.equals(chosen)) {
+                                loadPlaylist(currentPlaylist);
+                            }
+                            refreshPlaylistList();
+                        }
+                    });
+                });
+            });
+
+            menu.getItems().addAll(edit, addTo, remove);
+            cell.setContextMenu(menu);
+            return cell;
+        });
+        songListView.setId("song-list");
+        songListView.setAccessibleText("Songs list");
         songListView.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 Song selectedSong = songListView.getSelectionModel().getSelectedItem();
@@ -211,27 +341,39 @@ public class MainWindow {
                 }
             }
         });
-        
+
         refreshSongList();
-        
+
         libraryPane.getChildren().addAll(searchField, songsLabel, songListView);
         VBox.setVgrow(songListView, Priority.ALWAYS);
-        
+
         return libraryPane;
     }
-    
+
     private VBox createPlaylistPane() {
         VBox playlistPane = new VBox(10);
         playlistPane.setPadding(new Insets(10));
-        
+
         // Playlists header with add button
-        HBox playlistHeader = new HBox(10);
+        HBox playlistHeader = new HBox(6);
         Label playlistLabel = new Label("Playlists");
-        playlistLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        playlistLabel.getStyleClass().add("section-label");
+        playlistLabel.setLabelFor(playlistListView);
         Button addPlaylistButton = new Button("+");
         addPlaylistButton.setOnAction(e -> createNewPlaylist());
+        addPlaylistButton.getStyleClass().add("add-playlist-button");
+
+        // Slightly raise the '+' button to align with the label
+        addPlaylistButton.setTranslateY(-4);
         playlistHeader.getChildren().addAll(playlistLabel, addPlaylistButton);
-        
+
+        // 'Library' selector button at the top of the playlists pane
+        Button libraryButton = new Button("View Full Library");
+        libraryButton.setOnAction(e -> selectLibrary());
+        libraryButton.getStyleClass().add("library-button");
+        libraryButton.setId("btn-view-full-library");
+        libraryButton.setTooltip(new javafx.scene.control.Tooltip("Show the full music library"));
+
         // Playlists list
         playlistListView = new ListView<>();
         playlistListView.setCellFactory(listView -> {
@@ -246,23 +388,23 @@ public class MainWindow {
                     confirm.setHeaderText("Delete playlist '" + p.getName() + "'");
                     confirm.setContentText("Are you sure? This action cannot be undone.");
                     confirm.showAndWait().ifPresent(bt -> {
-                            if (bt.getButtonData().isDefaultButton()) {
-                                musicLibrary.removePlaylist(p);
-                                try {
-                                    PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                                } catch (IOException ex) {
-                                    Alert err = new Alert(Alert.AlertType.ERROR);
-                                    err.setTitle("Save Error");
-                                    err.setHeaderText("Failed to persist playlists");
-                                    err.setContentText(ex.getMessage());
-                                    err.showAndWait();
-                                }
-                                refreshPlaylistList();
-                                if (currentPlaylist != null && currentPlaylist.equals(p)) {
-                                    currentPlaylist = null;
-                                    refreshSongList();
-                                }
+                        if (bt.getButtonData().isDefaultButton()) {
+                            musicLibrary.removePlaylist(p);
+                            try {
+                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                            } catch (IOException ex) {
+                                Alert err = new Alert(Alert.AlertType.ERROR);
+                                err.setTitle("Save Error");
+                                err.setHeaderText("Failed to persist playlists");
+                                err.setContentText(ex.getMessage());
+                                err.showAndWait();
                             }
+                            refreshPlaylistList();
+                            if (currentPlaylist != null && currentPlaylist.equals(p)) {
+                                currentPlaylist = null;
+                                refreshSongList();
+                            }
+                        }
                     });
                 }
             });
@@ -278,28 +420,34 @@ public class MainWindow {
                 }
             }
         });
-        
+
         refreshPlaylistList();
-        
-        playlistPane.getChildren().addAll(playlistHeader, playlistListView);
+
+        playlistListView.setId("playlist-list");
+        playlistListView.setAccessibleText("Playlists list");
+
+        playlistPane.getChildren().addAll(playlistHeader, libraryButton, playlistListView);
         VBox.setVgrow(playlistListView, Priority.ALWAYS);
-        
+
         return playlistPane;
     }
-    
+
     private VBox createBottomControls() {
         VBox bottomControls = new VBox(5);
         bottomControls.setPadding(new Insets(10));
-        bottomControls.setStyle("-fx-background-color: #f0f0f0;");
-        
+        bottomControls.getStyleClass().add("bottom-controls");
+
         // Now playing info
         nowPlayingLabel = new Label("No song playing");
-        nowPlayingLabel.setStyle("-fx-font-weight: bold;");
-        
+        nowPlayingLabel.getStyleClass().add("now-playing-label");
+        nowPlayingLabel.getStyleClass().add("now-playing-label");
+        nowPlayingLabel.setId("now-playing");
+        nowPlayingLabel.setAccessibleText("Now playing label");
+
         // Progress controls
         HBox progressBox = new HBox(10);
         progressBox.setAlignment(Pos.CENTER);
-        
+
         timeLabel = new Label("0:00 / 0:00");
         progressSlider = new Slider(0, 100, 0);
         // Handle clicks and drags: when user presses, stop automatic updates; on release, seek
@@ -315,47 +463,97 @@ public class MainWindow {
                 long posUs = (long) (durationUs * (newVal.doubleValue() / 100.0));
                 timeLabel.setText(formatTime(posUs / 1000000) + " / " + formatTime(durationUs / 1000000));
             }
+            // update visual fill for the slider (left-of-thumb)
+            setSliderFill(progressSlider, newVal.doubleValue());
         });
-        
+
         progressBox.getChildren().addAll(timeLabel, progressSlider);
         HBox.setHgrow(progressSlider, Priority.ALWAYS);
-        
+
         // Playback controls
         HBox controlsBox = new HBox(10);
         controlsBox.setAlignment(Pos.CENTER);
-        
+
         previousButton = new Button("⏮");
         playPauseButton = new Button("▶");
         stopButton = new Button("⏹");
         nextButton = new Button("⏭");
-        
+        loopButton = new Button("🔁");
+        previousButton.getStyleClass().add("controls-button");
+        playPauseButton.getStyleClass().add("controls-button");
+        stopButton.getStyleClass().add("controls-button");
+        nextButton.getStyleClass().add("controls-button");
+
+        // Accessibility and accelerators
+        playPauseButton.setId("btn-play-pause");
+        playPauseButton.setAccessibleText("Play or pause");
+
+        // Keep play/pause visually consistent with other control buttons
+        playPauseButton.setPrefWidth(36.0);
+        previousButton.setId("btn-previous");
+        previousButton.setAccessibleText("Previous track");
+        nextButton.setId("btn-next");
+        nextButton.setAccessibleText("Next track");
+        stopButton.setId("btn-stop");
+        stopButton.setAccessibleText("Stop playback");
+
+        // Keyboard shortcuts for playback (Ctrl+Space = Play/Pause, Ctrl+Right = Next, Ctrl+Left = Previous)
+        playPauseButton.getScene(); // ensure scene accessibility for accelerators later
+
         previousButton.setOnAction(e -> playPrevious());
         playPauseButton.setOnAction(e -> togglePlayPause());
         stopButton.setOnAction(e -> stop());
         nextButton.setOnAction(e -> playNext());
-        
-        controlsBox.getChildren().addAll(previousButton, playPauseButton, stopButton, nextButton);
-        
+
+        // Make loop visually consistent and set a smaller width
+        loopButton.getStyleClass().add("controls-button");
+        loopButton.setPrefWidth(36.0);
+        loopButton.setId("btn-loop");
+
+        loopButton.setOnAction(e -> {
+            loopCurrent = !loopCurrent;
+            // visually indicate state
+            loopButton.getStyleClass().removeAll("loop-on");
+            if (loopCurrent) {
+                loopButton.getStyleClass().add("loop-on");
+            }
+        });
+
+        // Ensure stop button is small and matches loop
+        stopButton.getStyleClass().add("controls-button");
+        stopButton.setPrefWidth(36.0);
+
+        // Order: previous, play/pause, next, loop, stop (loop/stop to the right of forward)
+        controlsBox.getChildren().addAll(previousButton, playPauseButton, nextButton, loopButton, stopButton);
+
         // Volume control
         HBox volumeBox = new HBox(5);
         volumeBox.setAlignment(Pos.CENTER);
         Label volumeLabel = new Label("🔊");
         volumeSlider = new Slider(0, 1, 0.5);
-        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> 
-            audioPlayer.setVolume(newVal.floatValue()));
-        
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal)
+                -> audioPlayer.setVolume(newVal.floatValue()));
+        volumeSlider.getStyleClass().add("volume-slider");
+        volumeSlider.setId("volume-slider");
+        volumeSlider.setAccessibleText("Volume");
+
+        // Update visual fill for volume slider (value is 0.0-1.0)
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> setSliderFill(volumeSlider, newVal.doubleValue() * 100.0));
+        setSliderFill(progressSlider, progressSlider.getValue());
+        setSliderFill(volumeSlider, volumeSlider.getValue() * 100.0);
+
         volumeBox.getChildren().addAll(volumeLabel, volumeSlider);
-        
+
         // Combine all controls
         HBox allControls = new HBox(20);
         allControls.setAlignment(Pos.CENTER);
         allControls.getChildren().addAll(controlsBox, volumeBox);
-        
+
         bottomControls.getChildren().addAll(nowPlayingLabel, progressBox, allControls);
-        
+
         return bottomControls;
     }
-    
+
     private void setupAudioPlayerListeners() {
         audioPlayer.addListener(new AudioPlayer.AudioPlayerListener() {
             @Override
@@ -364,14 +562,14 @@ public class MainWindow {
                     nowPlayingLabel.setText("Now Playing: " + song.toString());
                 });
             }
-            
+
             @Override
             public void onPlayStateChanged(boolean isPlaying) {
                 Platform.runLater(() -> {
                     playPauseButton.setText(isPlaying ? "⏸" : "▶");
                 });
             }
-            
+
             @Override
             public void onPositionChanged(long position, long duration) {
                 Platform.runLater(() -> {
@@ -379,18 +577,18 @@ public class MainWindow {
                         double progress = duration > 0 ? (double) position / duration * 100 : 0;
                         progressSlider.setValue(progress);
                     }
-                    
+
                     String currentTime = formatTime(position / 1000000);
                     String totalTime = formatTime(duration / 1000000);
                     timeLabel.setText(currentTime + " / " + totalTime);
                 });
             }
-            
+
             @Override
             public void onVolumeChanged(float volume) {
                 Platform.runLater(() -> volumeSlider.setValue(volume));
             }
-            
+
             @Override
             public void onError(String error) {
                 Platform.runLater(() -> {
@@ -401,32 +599,122 @@ public class MainWindow {
                     alert.showAndWait();
                 });
             }
-            
+
             @Override
             public void onSongEnded() {
-                // Advance to the next track when a song finishes
-                Platform.runLater(() -> playNext());
+                // Advance to the next track when a song finishes (or loop if enabled)
+                Platform.runLater(() -> {
+                    if (loopCurrent) {
+                        // restart the same song
+                        List<Song> currentList;
+                        if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
+                            currentList = currentPlaylist.getSongs();
+                        } else {
+                            currentList = songListView.getItems();
+                        }
+                        if (currentSongIndex >= 0 && currentSongIndex < currentList.size()) {
+                            Song s = currentList.get(currentSongIndex);
+                            if (s != null) {
+                                audioPlayer.seek(0);
+                                audioPlayer.playSong(s);
+                            }
+                        }
+                    } else {
+                        playNext();
+                    }
+                });
             }
         });
     }
-    
+
     // Event handlers and utility methods would continue here...
     // This is getting quite long, so I'll create separate methods for the remaining functionality
-    
     private String formatTime(long seconds) {
         long minutes = seconds / 60;
         long remainingSeconds = seconds % 60;
         return String.format("%d:%02d", minutes, remainingSeconds);
     }
-    
+
     private void refreshSongList() {
         songListView.getItems().clear();
         songListView.getItems().addAll(musicLibrary.getAllSongs());
     }
-    
+
+    /**
+     * Set visual fill for a slider: fills left side up to value percent using
+     * accent color
+     */
+    private void setSliderFill(javafx.scene.control.Slider slider, double percent) {
+        percent = Math.max(0.0, Math.min(100.0, percent));
+        final double p = percent;
+        final String color = "#5ac8fa"; // light blue (iTunes-like)
+        final String style = String.format("-fx-background-color: linear-gradient(to right, %s %s%%, transparent %s%%);", color, p, p);
+
+        try {
+            // Try to apply style to the track node (so only the inside of the progress bar is filled)
+            javafx.application.Platform.runLater(() -> {
+                try {
+                    javafx.scene.Node track = slider.lookup(".track");
+                    if (track != null) {
+                        track.setStyle(style);
+                        return;
+                    }
+                    // Fallback: try the bar element
+                    javafx.scene.Node bar = slider.lookup(".track .bar");
+                    if (bar != null) {
+                        bar.setStyle(style);
+                        return;
+                    }
+                    // Fallback to applying style on slider itself
+                    slider.setStyle(style);
+                } catch (Exception ignored) {
+                }
+            });
+        } catch (Exception ignored) {
+        }
+    }
+
     private void refreshPlaylistList() {
         playlistListView.getItems().clear();
         playlistListView.getItems().addAll(musicLibrary.getAllPlaylists());
+    }
+
+    /**
+     * Show the full library (deselect any playlist)
+     */
+    private void selectLibrary() {
+        this.currentPlaylist = null;
+        // Refresh song list to show entire library
+        refreshSongList();
+        // Clear playlist selection
+        playlistListView.getSelectionModel().clearSelection();
+        // update UI if needed
+        nowPlayingLabel.setText("No song playing");
+        currentSongIndex = -1;
+        // Configure song list for library mode (default cell factory)
+        songListView.setCellFactory(listView -> {
+            SongListCell cell = new SongListCell();
+            ContextMenu menu = new ContextMenu();
+            MenuItem edit = new MenuItem("Edit Metadata");
+            edit.setOnAction(e -> {
+                Song s = cell.getItem();
+                if (s != null) {
+                    editSongMetadata(s);
+                }
+            });
+
+            MenuItem addTo = new MenuItem("Add to Playlist...");
+            addTo.setOnAction(e -> {
+                Song s = cell.getItem();
+                if (s != null) {
+                    addSongToPlaylist(s);
+                }
+            });
+
+            menu.getItems().addAll(edit, addTo);
+            cell.setContextMenu(menu);
+            return cell;
+        });
     }
 
     private void configureSongListForPlaylistMode() {
@@ -434,7 +722,7 @@ public class MainWindow {
         songListView.setCellFactory(listView -> {
             SongListCell cell = new SongListCell();
             ContextMenu menu = new ContextMenu();
-            MenuItem remove = new MenuItem("Remove from playlist");
+            MenuItem remove = new MenuItem("Remove from playlist...");
             remove.setOnAction(e -> {
                 Song s = cell.getItem();
                 if (currentPlaylist != null && s != null) {
@@ -443,19 +731,19 @@ public class MainWindow {
                     confirm.setHeaderText("Remove '" + s.getTitle() + "' from playlist '" + currentPlaylist.getName() + "'");
                     confirm.setContentText("Are you sure?");
                     confirm.showAndWait().ifPresent(bt -> {
-                            if (bt.getButtonData().isDefaultButton()) {
-                                currentPlaylist.removeSong(s);
-                                try {
-                                    PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                                } catch (IOException ex) {
-                                    Alert err = new Alert(Alert.AlertType.ERROR);
-                                    err.setTitle("Save Error");
-                                    err.setHeaderText("Failed to persist playlists");
-                                    err.setContentText(ex.getMessage());
-                                    err.showAndWait();
-                                }
-                                loadPlaylist(currentPlaylist);
+                        if (bt.getButtonData().isDefaultButton()) {
+                            currentPlaylist.removeSong(s);
+                            try {
+                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                            } catch (IOException ex) {
+                                Alert err = new Alert(Alert.AlertType.ERROR);
+                                err.setTitle("Save Error");
+                                err.setHeaderText("Failed to persist playlists");
+                                err.setContentText(ex.getMessage());
+                                err.showAndWait();
                             }
+                            loadPlaylist(currentPlaylist);
+                        }
                     });
                 }
             });
@@ -464,7 +752,9 @@ public class MainWindow {
 
             // Drag handlers for reordering
             cell.setOnDragDetected(event -> {
-                if (cell.getItem() == null) return;
+                if (cell.getItem() == null) {
+                    return;
+                }
                 Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
                 ClipboardContent content = new ClipboardContent();
                 content.putString(String.valueOf(songListView.getItems().indexOf(cell.getItem())));
@@ -508,7 +798,7 @@ public class MainWindow {
             return cell;
         });
     }
-    
+
     private void performSearch(String query) {
         if (query == null || query.trim().isEmpty()) {
             refreshSongList();
@@ -518,9 +808,11 @@ public class MainWindow {
             songListView.getItems().addAll(results);
         }
     }
-    
+
     private void playSong(Song song) {
-        if (song == null) return;
+        if (song == null) {
+            return;
+        }
         audioPlayer.playSong(song);
 
         // Update current list and index
@@ -535,7 +827,163 @@ public class MainWindow {
         // Select in UI
         songListView.getSelectionModel().select(song);
     }
-    
+
+    private void editSongMetadata(Song song) {
+        if (song == null) {
+            return;
+        }
+        // Create a single dialog with all editable fields
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Edit Song Metadata");
+        dialog.setHeaderText("Edit metadata for: " + song.getTitle());
+
+        // Buttons
+        ButtonType saveBtn = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(saveBtn, cancelBtn);
+
+        // Fields
+        TextField titleField = new TextField(song.getTitle());
+        TextField artistField = new TextField(song.getArtist() != null ? song.getArtist().getName() : "");
+        TextField albumField = new TextField(song.getAlbum() != null ? song.getAlbum().getTitle() : "");
+        TextField genreField = new TextField(song.getGenre() != null ? song.getGenre() : "");
+        TextField trackField = new TextField(song.getTrackNumber() > 0 ? String.valueOf(song.getTrackNumber()) : "");
+        TextField pathField = new TextField(song.getFilePath() != null ? song.getFilePath() : "");
+
+        // Layout
+        VBox content = new VBox(8);
+        content.getChildren().addAll(
+                new Label("Title:"), titleField,
+                new Label("Artist:"), artistField,
+                new Label("Album:"), albumField,
+                new Label("Genre:"), genreField,
+                new Label("Track number:"), trackField,
+                new Label("File path:"), pathField
+        );
+        dialog.getDialogPane().setContent(content);
+
+        dialog.setResultConverter(btn -> btn);
+        dialog.showAndWait().ifPresent(result -> {
+            if (result == saveBtn) {
+                String newTitle = titleField.getText() != null ? titleField.getText().trim() : "";
+                String newArtist = artistField.getText() != null ? artistField.getText().trim() : "";
+                String newAlbum = albumField.getText() != null ? albumField.getText().trim() : "";
+                String newGenre = genreField.getText() != null ? genreField.getText().trim() : "";
+                String newTrack = trackField.getText() != null ? trackField.getText().trim() : "";
+                String newPath = pathField.getText() != null ? pathField.getText().trim() : "";
+
+                if (!newTitle.isEmpty()) {
+                    song.setTitle(newTitle);
+                }
+
+                // Artist: find or create
+                Artist artistObj = song.getArtist();
+                if (!newArtist.isEmpty()) {
+                    Artist found = null;
+                    for (Artist a : musicLibrary.getAllArtists()) {
+                        if (a.getName().equals(newArtist)) {
+                            found = a;
+                            break;
+                        }
+                    }
+                    if (found == null) {
+                        found = new Artist(newArtist);
+                        musicLibrary.addArtist(found);
+                    }
+                    artistObj = found;
+                    song.setArtist(found);
+                }
+
+                // Album: find or create and associate with artist
+                if (!newAlbum.isEmpty()) {
+                    Album found = null;
+                    for (Album al : musicLibrary.getAllAlbums()) {
+                        if (al.getTitle().equals(newAlbum) && al.getArtist().equals(artistObj)) {
+                            found = al;
+                            break;
+                        }
+                    }
+                    if (found == null) {
+                        found = new Album(newAlbum, artistObj);
+                        musicLibrary.addAlbum(found);
+                        if (artistObj != null) {
+                            artistObj.addAlbum(found);
+                        }
+                    }
+                    song.setAlbum(found);
+                    found.addSong(song);
+                }
+
+                if (!newGenre.isEmpty()) {
+                    song.setGenre(newGenre);
+                }
+                if (!newTrack.isEmpty()) {
+                    try {
+                        song.setTrackNumber(Integer.parseInt(newTrack));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                if (!newPath.isEmpty()) {
+                    song.setFilePath(newPath);
+                }
+
+                try {
+                    MusicLibraryIO.saveLibrary(musicLibrary);
+                } catch (IOException e) {
+                    Alert err = new Alert(Alert.AlertType.ERROR);
+                    err.setTitle("Save Error");
+                    err.setHeaderText("Failed to save library");
+                    err.setContentText(e.getMessage());
+                    err.showAndWait();
+                }
+
+                refreshSongList();
+            }
+        });
+    }
+
+    private void addSongToPlaylist(Song song) {
+        if (song == null) {
+            return;
+        }
+        List<Playlist> playlists = musicLibrary.getAllPlaylists();
+        ChoiceDialog<Playlist> dialog = new ChoiceDialog<>(null, playlists);
+        dialog.setTitle("Add to Playlist");
+        dialog.setHeaderText("Choose a playlist to add the song to");
+        dialog.setContentText("Playlist:");
+        // Provide an option to create new playlist if none or user wants
+        dialog.showAndWait().ifPresent(chosen -> {
+            if (chosen == null) {
+                // Prompt for new playlist name
+                TextInputDialog create = new TextInputDialog();
+                create.setTitle("New Playlist");
+                create.setHeaderText("Create a new playlist");
+                create.setContentText("Playlist name:");
+                create.showAndWait().ifPresent(name -> {
+                    if (name != null && !name.trim().isEmpty()) {
+                        Playlist p = new Playlist(name.trim());
+                        p.addSong(song);
+                        musicLibrary.addPlaylist(p);
+                        try {
+                            PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                        } catch (IOException ex) {
+                        }
+                        refreshPlaylistList();
+                    }
+                });
+            } else {
+                if (!chosen.getSongs().contains(song)) {
+                    chosen.addSong(song);
+                    try {
+                        PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                    } catch (IOException ex) {
+                    }
+                    refreshPlaylistList();
+                }
+            }
+        });
+    }
+
     private void togglePlayPause() {
         if (audioPlayer.isPlaying()) {
             audioPlayer.pause();
@@ -543,11 +991,16 @@ public class MainWindow {
             audioPlayer.resume();
         }
     }
-    
+
     private void stop() {
         audioPlayer.stop();
+        // Reset UI state
+        currentSongIndex = -1;
+        songListView.getSelectionModel().clearSelection();
+        progressSlider.setValue(0);
+        nowPlayingLabel.setText("No song playing");
     }
-    
+
     private void playNext() {
         List<Song> currentList;
         if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
@@ -556,9 +1009,13 @@ public class MainWindow {
             currentList = songListView.getItems();
         }
 
-        if (currentList == null || currentList.isEmpty()) return;
-
-        int nextIndex = currentSongIndex + 1;
+        if (currentList == null || currentList.isEmpty()) {
+            return;
+        }
+        int nextIndex = currentSongIndex >= 0 ? currentSongIndex + 1 : songListView.getSelectionModel().getSelectedIndex();
+        if (nextIndex < 0) {
+            nextIndex = 0;
+        }
         if (nextIndex < 0 || nextIndex >= currentList.size()) {
             // reached end — stop playback
             audioPlayer.stop();
@@ -571,7 +1028,7 @@ public class MainWindow {
             playSong(nextSong);
         }
     }
-    
+
     private void playPrevious() {
         List<Song> currentList;
         if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
@@ -580,9 +1037,15 @@ public class MainWindow {
             currentList = songListView.getItems();
         }
 
-        if (currentList == null || currentList.isEmpty()) return;
-
-        int prevIndex = currentSongIndex - 1;
+        if (currentList == null || currentList.isEmpty()) {
+            return;
+        }
+        int prevIndex;
+        if (currentSongIndex >= 0) {
+            prevIndex = currentSongIndex - 1;
+        } else {
+            prevIndex = songListView.getSelectionModel().getSelectedIndex();
+        }
         if (prevIndex < 0) {
             // at start — restart current track
             if (currentSongIndex >= 0 && currentSongIndex < currentList.size()) {
@@ -599,19 +1062,21 @@ public class MainWindow {
             playSong(prevSong);
         }
     }
-    
+
     private void seekToPosition() {
         try {
             double percent = progressSlider.getValue();
             long durationUs = audioPlayer.getDuration();
-            if (durationUs <= 0) return;
+            if (durationUs <= 0) {
+                return;
+            }
             long targetUs = (long) (durationUs * (percent / 100.0));
             audioPlayer.seek(targetUs);
         } catch (Exception e) {
             // silent fail — individual audio backends may not support seeking
         }
     }
-    
+
     private void importMusic() {
         try {
             ConfigManager config = ConfigManager.getInstance();
@@ -723,7 +1188,7 @@ public class MainWindow {
             alert.showAndWait();
         }
     }
-    
+
     private void createNewPlaylist() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("New Playlist");
@@ -731,7 +1196,9 @@ public class MainWindow {
         dialog.setContentText("Playlist name:");
 
         dialog.showAndWait().ifPresent(name -> {
-            if (name == null || name.trim().isEmpty()) return;
+            if (name == null || name.trim().isEmpty()) {
+                return;
+            }
             Playlist playlist = new Playlist(name.trim());
             musicLibrary.addPlaylist(playlist);
             refreshPlaylistList();
@@ -747,17 +1214,19 @@ public class MainWindow {
             }
         });
     }
-    
+
     private void loadPlaylist(Playlist playlist) {
-    if (playlist == null) return;
-    this.currentPlaylist = playlist;
-    songListView.getItems().clear();
-    songListView.getItems().addAll(playlist.getSongs());
-    currentSongIndex = -1;
-    // Configure song list for playlist actions (remove/reorder)
-    configureSongListForPlaylistMode();
+        if (playlist == null) {
+            return;
+        }
+        this.currentPlaylist = playlist;
+        songListView.getItems().clear();
+        songListView.getItems().addAll(playlist.getSongs());
+        currentSongIndex = -1;
+        // Configure song list for playlist actions (remove/reorder)
+        configureSongListForPlaylistMode();
     }
-    
+
     private void showAbout() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("About");

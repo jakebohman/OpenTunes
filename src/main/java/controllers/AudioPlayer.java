@@ -1,4 +1,4 @@
-package com.spotify.clone.controllers;
+package controllers;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,16 +12,16 @@ import javax.sound.sampled.FloatControl;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
-import com.spotify.clone.models.Song;
-
 import javafx.application.Platform;
 import javafx.scene.media.Media;
 import javafx.scene.media.MediaPlayer;
+import models.Song;
 
 /**
  * Handles audio playback functionality
  */
 public class AudioPlayer {
+
     private Clip audioClip;
     private Song currentSong;
     private boolean isPlaying;
@@ -31,34 +31,40 @@ public class AudioPlayer {
     private List<AudioPlayerListener> listeners;
     private MediaPlayer mediaPlayerFallback;
     private boolean usingMediaFallback = false;
-    
+
     public AudioPlayer() {
         this.listeners = new ArrayList<>();
         this.isPlaying = false;
         this.isPaused = false;
         this.pausePosition = 0;
     }
-    
+
     /**
      * Interface for audio player event listeners
      */
     public interface AudioPlayerListener {
+
         void onSongChanged(Song song);
+
         void onPlayStateChanged(boolean isPlaying);
+
         void onPositionChanged(long position, long duration);
+
         void onVolumeChanged(float volume);
+
         void onError(String error);
+
         void onSongEnded();
     }
-    
+
     public void addListener(AudioPlayerListener listener) {
         listeners.add(listener);
     }
-    
+
     public void removeListener(AudioPlayerListener listener) {
         listeners.remove(listener);
     }
-    
+
     /**
      * Load and play a song
      */
@@ -67,13 +73,13 @@ public class AudioPlayer {
             notifyError("Invalid song or file path");
             return false;
         }
-        
+
         File audioFile = new File(song.getFilePath());
         if (!audioFile.exists()) {
             notifyError("Audio file not found: " + song.getFilePath());
             return false;
         }
-        
+
         // Try Java Sound Clip first (fast, low-latency). If it fails for format reasons, try JavaFX MediaPlayer.
         try {
             stop();
@@ -103,25 +109,27 @@ public class AudioPlayer {
                 stop();
                 usingMediaFallback = true;
                 Media media = new Media(audioFile.toURI().toString());
-                mediaPlayerFallback = new MediaPlayer(media);
-                mediaPlayerFallback.setVolume(volume);
-                mediaPlayerFallback.setOnReady(() -> {
+                MediaPlayer mp = new MediaPlayer(media);
+                mediaPlayerFallback = mp;
+                mp.setVolume(volume);
+                mp.setOnReady(() -> {
                     currentSong = song;
                     isPlaying = true;
                     isPaused = false;
                     pausePosition = 0;
                     notifySongChanged(song);
                     notifyPlayStateChanged(true);
-                    // Start a small timer to update position via mediaPlayerFallback.getCurrentTime() if desired
+                    startPositionTracking();
                 });
-                mediaPlayerFallback.setOnEndOfMedia(() -> {
+                mp.setOnEndOfMedia(() -> {
                     isPlaying = false;
                     isPaused = false;
                     notifyPlayStateChanged(false);
                     notifySongEnded();
                 });
-                mediaPlayerFallback.setOnError(() -> notifyError("MediaPlayer error: " + mediaPlayerFallback.getError().getMessage()));
-                Platform.runLater(() -> mediaPlayerFallback.play());
+                mp.setOnError(() -> notifyError("MediaPlayer error: " + mp.getError().getMessage()));
+                final MediaPlayer toPlay = mp;
+                Platform.runLater(() -> toPlay.play());
                 return true;
             } catch (Exception ex) {
                 notifyError("Playback error: " + ex.getMessage());
@@ -129,14 +137,13 @@ public class AudioPlayer {
             }
         }
     }
-    
+
     /**
      * Pause current playback
      */
     public void pause() {
         if (usingMediaFallback && mediaPlayerFallback != null && isPlaying && !isPaused) {
             mediaPlayerFallback.pause();
-            // JavaFX MediaPlayer reports time in milliseconds
             pausePosition = (long) (mediaPlayerFallback.getCurrentTime().toMillis() * 1000);
             isPaused = true;
             isPlaying = false;
@@ -152,7 +159,7 @@ public class AudioPlayer {
             notifyPlayStateChanged(false);
         }
     }
-    
+
     /**
      * Resume paused playback
      */
@@ -165,6 +172,7 @@ public class AudioPlayer {
                 isPaused = false;
                 isPlaying = true;
                 notifyPlayStateChanged(true);
+                startPositionTracking();
             });
             return;
         }
@@ -178,22 +186,31 @@ public class AudioPlayer {
             startPositionTracking();
         }
     }
-    
+
     /**
      * Stop current playback
      */
     public void stop() {
         if (usingMediaFallback) {
-            if (mediaPlayerFallback != null) {
+            // capture the current media player so we don't reference the field from the UI thread after nulling it
+            final MediaPlayer mp = mediaPlayerFallback;
+            mediaPlayerFallback = null;
+            usingMediaFallback = false;
+            if (mp != null) {
                 try {
                     Platform.runLater(() -> {
-                        mediaPlayerFallback.stop();
-                        mediaPlayerFallback.dispose();
+                        try {
+                            mp.stop();
+                        } catch (Exception ignored) {
+                        }
+                        try {
+                            mp.dispose();
+                        } catch (Exception ignored) {
+                        }
                     });
-                } catch (Exception ignored) {}
-                mediaPlayerFallback = null;
+                } catch (Exception ignored) {
+                }
             }
-            usingMediaFallback = false;
         }
 
         if (audioClip != null) {
@@ -207,13 +224,12 @@ public class AudioPlayer {
         pausePosition = 0;
         notifyPlayStateChanged(false);
     }
-    
+
     /**
      * Seek to a specific position (in microseconds)
      */
     public void seek(long position) {
         if (usingMediaFallback && mediaPlayerFallback != null) {
-            // position is in microseconds
             Platform.runLater(() -> mediaPlayerFallback.seek(javafx.util.Duration.millis(position / 1000.0)));
             pausePosition = position;
             return;
@@ -227,7 +243,7 @@ public class AudioPlayer {
             }
         }
     }
-    
+
     /**
      * Set volume (0.0 to 1.0)
      */
@@ -236,7 +252,7 @@ public class AudioPlayer {
         setVolumeInternal(this.volume);
         notifyVolumeChanged(this.volume);
     }
-    
+
     private void setVolumeInternal(float volume) {
         if (audioClip != null) {
             try {
@@ -247,16 +263,20 @@ public class AudioPlayer {
                 float gain = min + (max - min) * volume;
                 volumeControl.setValue(gain);
             } catch (IllegalArgumentException e) {
-                // Volume control not supported
+                notifyError("Volume control not supported");
             }
         }
         if (usingMediaFallback && mediaPlayerFallback != null) {
             try {
                 Platform.runLater(() -> mediaPlayerFallback.setVolume(volume));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
-    
+
+    /*
+     * Track playback position and notify listeners
+     */
     private void startPositionTracking() {
         Thread positionThread = new Thread(() -> {
             while (isPlaying) {
@@ -290,69 +310,87 @@ public class AudioPlayer {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
                     break;
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         });
         positionThread.setDaemon(true);
         positionThread.start();
     }
-    
+
     // Getters
     public Song getCurrentSong() {
         return currentSong;
     }
-    
+
     public boolean isPlaying() {
         return isPlaying;
     }
-    
+
     public boolean isPaused() {
         return isPaused;
     }
-    
+
     public float getVolume() {
         return volume;
     }
-    
+
     public long getCurrentPosition() {
+        if (usingMediaFallback && mediaPlayerFallback != null) {
+            try {
+                javafx.util.Duration cur = mediaPlayerFallback.getCurrentTime();
+                return (long) (cur.toMillis() * 1000);
+            } catch (Exception ignored) {
+            }
+        }
         if (audioClip != null) {
             return isPaused ? pausePosition : audioClip.getMicrosecondPosition();
         }
         return 0;
     }
-    
+
     public long getDuration() {
+        if (usingMediaFallback && mediaPlayerFallback != null) {
+            try {
+                javafx.util.Duration total = mediaPlayerFallback.getTotalDuration();
+                if (total == null || total.toMillis() <= 0) {
+                    return 0;
+                }
+                return (long) (total.toMillis() * 1000);
+            } catch (Exception ignored) {
+            }
+        }
         if (audioClip != null) {
             return audioClip.getMicrosecondLength();
         }
         return 0;
     }
-    
+
     // Notification methods
     private void notifySongChanged(Song song) {
         for (AudioPlayerListener listener : listeners) {
             listener.onSongChanged(song);
         }
     }
-    
+
     private void notifyPlayStateChanged(boolean playing) {
         for (AudioPlayerListener listener : listeners) {
             listener.onPlayStateChanged(playing);
         }
     }
-    
+
     private void notifyPositionChanged(long position, long duration) {
         for (AudioPlayerListener listener : listeners) {
             listener.onPositionChanged(position, duration);
         }
     }
-    
+
     private void notifyVolumeChanged(float volume) {
         for (AudioPlayerListener listener : listeners) {
             listener.onVolumeChanged(volume);
         }
     }
-    
+
     private void notifySongEnded() {
         for (AudioPlayerListener listener : listeners) {
             try {

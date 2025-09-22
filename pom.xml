@@ -6,22 +6,21 @@
     
     <modelVersion>4.0.0</modelVersion>
     
-    <groupId>com.spotify.clone</groupId>
-    <artifactId>spotify-clone</artifactId>
+    <groupId>java</groupId>
+    <artifactId>open-tunes</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
     
-    <name>Spotify Clone</name>
+    <name>OpenTunes</name>
     <description>A barebones clone of Spotify/iTunes using Java</description>
     
     <properties>
-    <maven.compiler.source>11</maven.compiler.source>
-    <maven.compiler.target>11</maven.compiler.target>
-    <!-- Use release for stricter compatibility checks -->
-    <maven.compiler.release>11</maven.compiler.release>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <maven.compiler.release>11</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <javafx.version>17.0.2</javafx.version>
-    <jaudiotagger.version>3.0.1</jaudiotagger.version>
+        <jaudiotagger.version>3.0.1</jaudiotagger.version>
     </properties>
     
     <dependencies>
@@ -90,7 +89,7 @@
                 <artifactId>javafx-maven-plugin</artifactId>
                 <version>0.0.8</version>
                 <configuration>
-                    <mainClass>com.spotify.clone.SpotifyCloneApp</mainClass>
+                    <mainClass>OpenTunesApp</mainClass>
                 </configuration>
             </plugin>
             <plugin>

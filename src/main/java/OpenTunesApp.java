@@ -1,14 +1,12 @@
-package com.spotify.clone;
-
-import com.spotify.clone.views.MainWindow;
 import javafx.application.Application;
 import javafx.stage.Stage;
+import views.MainWindow;
 
 /**
  * Main application class for the Spotify Clone
  */
-public class SpotifyCloneApp extends Application {
-    
+public class OpenTunesApp extends Application {
+
     @Override
     public void start(Stage primaryStage) {
         try {
@@ -17,7 +15,7 @@ public class SpotifyCloneApp extends Application {
             e.printStackTrace();
         }
     }
-    
+
     public static void main(String[] args) {
         launch(args);
     }

@@ -1,0 +1,68 @@
+/* Base (light) theme */
+.root {
+    -fx-font-family: "Segoe UI", "Arial", sans-serif;
+    -fx-base: #ffffff;
+    -fx-background-color: #ffffff;
+}
+
+.menu-bar {
+    -fx-background-color: linear-gradient(#f8f8f8, #e8e8e8);
+}
+
+.now-playing-label {
+    -fx-font-size: 14px;
+    -fx-padding: 6 0 6 0;
+}
+
+.song-list,
+.playlist-list {
+    -fx-background-color: white;
+    -fx-border-color: #dcdcdc;
+    -fx-border-width: 1;
+}
+
+.controls-button {
+    -fx-font-size: 14px;
+    -fx-padding: 6 10 6 10;
+}
+
+.progress-slider {
+    -fx-accent: #1db954;
+}
+
+.volume-slider {
+    -fx-accent: #1db954;
+}
+
+/* Make slider tracks visible even when unfilled */
+.slider .track {
+    -fx-background-color: transparent;
+    -fx-border-color: #d0d0d0;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-padding: 2;
+    -fx-min-height: 8px;
+}
+
+.slider .track .bar {
+    -fx-background-color: transparent;
+}
+
+/* Responsive tweak: ensure split pane resizes reasonably */
+.split-pane {
+    -fx-padding: 6;
+}
+
+.list-view {
+    -fx-focus-color: -fx-accent;
+}
+
+.section-label {
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+}
+
+.bottom-controls {
+    -fx-background-color: #f0f0f0;
+    -fx-padding: 8;
+}

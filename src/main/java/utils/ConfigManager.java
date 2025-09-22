@@ -1,4 +1,4 @@
-package com.spotify.clone.utils;
+package utils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -10,22 +10,24 @@ import java.util.Properties;
  * Configuration manager for the application
  */
 public class ConfigManager {
-    private static final String CONFIG_FILE = "spotify-clone.properties";
+
+    private static final String CONFIG_FILE = "open-tunes.properties";
     private static ConfigManager instance;
     private Properties properties;
-    
+
     private ConfigManager() {
         properties = new Properties();
         loadConfig();
     }
-    
+
+    // Get singleton instance
     public static synchronized ConfigManager getInstance() {
         if (instance == null) {
             instance = new ConfigManager();
         }
         return instance;
     }
-    
+
     private void loadConfig() {
         File configFile = new File(CONFIG_FILE);
         if (configFile.exists()) {
@@ -35,11 +37,12 @@ public class ConfigManager {
                 System.err.println("Error loading config: " + e.getMessage());
             }
         }
-        
+
         // Set default values
         setDefaultValues();
     }
-    
+
+    // Set default config values if not present
     private void setDefaultValues() {
         if (!properties.containsKey("volume")) {
             properties.setProperty("volume", "0.5");
@@ -54,7 +57,7 @@ public class ConfigManager {
             properties.setProperty("windowHeight", "800");
         }
     }
-    
+
     public void saveConfig() throws IOException {
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             properties.store(fos, "Spotify Clone Configuration");
@@ -62,7 +65,8 @@ public class ConfigManager {
     }
 
     /**
-     * Safe wrapper to persist config without throwing (returns success boolean).
+     * Safe wrapper to persist config without throwing (returns success
+     * boolean).
      */
     public boolean saveConfigSafe() {
         try {
@@ -73,11 +77,11 @@ public class ConfigManager {
             return false;
         }
     }
-    
+
     public String getString(String key, String defaultValue) {
         return properties.getProperty(key, defaultValue);
     }
-    
+
     public int getInt(String key, int defaultValue) {
         try {
             return Integer.parseInt(properties.getProperty(key, String.valueOf(defaultValue)));
@@ -85,7 +89,7 @@ public class ConfigManager {
             return defaultValue;
         }
     }
-    
+
     public double getDouble(String key, double defaultValue) {
         try {
             return Double.parseDouble(properties.getProperty(key, String.valueOf(defaultValue)));
@@ -93,15 +97,15 @@ public class ConfigManager {
             return defaultValue;
         }
     }
-    
+
     public void setString(String key, String value) {
         properties.setProperty(key, value);
     }
-    
+
     public void setInt(String key, int value) {
         properties.setProperty(key, String.valueOf(value));
     }
-    
+
     public void setDouble(String key, double value) {
         properties.setProperty(key, String.valueOf(value));
     }

@@ -1,4 +1,4 @@
-package com.spotify.clone.utils;
+package utils;
 
 import java.io.File;
 import java.time.LocalDate;
@@ -14,20 +14,20 @@ import org.jaudiotagger.audio.AudioHeader;
 import org.jaudiotagger.tag.FieldKey;
 import org.jaudiotagger.tag.Tag;
 
-import com.spotify.clone.models.Album;
-import com.spotify.clone.models.Artist;
-import com.spotify.clone.models.MusicLibrary;
-import com.spotify.clone.models.Song;
+import models.Album;
+import models.Artist;
+import models.MusicLibrary;
+import models.Song;
 
 /**
  * Utility class for importing and managing audio files
  */
 public class MusicImporter {
-    
+
     private static final String[] SUPPORTED_FORMATS = {
         "mp3", "wav", "flac", "m4a", "ogg"
     };
-    
+
     /**
      * Import a single audio file
      */
@@ -35,56 +35,58 @@ public class MusicImporter {
         if (!isAudioFile(file)) {
             return null;
         }
-        
+
         try {
             // Read audio file metadata
             AudioFile audioFile = AudioFileIO.read(file);
             Tag tag = audioFile.getTag();
             AudioHeader header = audioFile.getAudioHeader();
-            
+
             // Extract metadata
             String title = getTagValue(tag, FieldKey.TITLE, file.getName());
             String artistName = getTagValue(tag, FieldKey.ARTIST, "Unknown Artist");
             String albumName = getTagValue(tag, FieldKey.ALBUM, "Unknown Album");
             String genre = getTagValue(tag, FieldKey.GENRE, "");
             String trackNumberStr = getTagValue(tag, FieldKey.TRACK, "0");
-            
+
             int trackNumber = parseTrackNumber(trackNumberStr);
             int durationSeconds = header.getTrackLength();
-            
+
             // Create or get artist
             MusicLibrary library = MusicLibrary.getInstance();
             Artist artist = findOrCreateArtist(artistName, library);
-            
+
             // Create or get album
             Album album = findOrCreateAlbum(albumName, artist, library);
-            
+
             // Create song
             Song song = new Song(title, artist, album, durationSeconds);
             song.setGenre(genre);
             song.setTrackNumber(trackNumber);
             song.setAudioFile(file);
-            
+
             // Add to album
             album.addSong(song);
-            
+
             // Add to library
             library.addSong(song);
-            
+
             return song;
-            
+
         } catch (Exception e) {
             // Attempt to create a basic fallback song; if that fails, bubble up as runtime exception
             try {
                 Song fallback = createBasicSong(file);
-                if (fallback != null) return fallback;
+                if (fallback != null) {
+                    return fallback;
+                }
                 throw new RuntimeException("Failed to import and fallback creation returned null for " + file.getName());
             } catch (Exception ex) {
                 throw new RuntimeException("Error importing file " + file.getName() + ": " + e.getMessage(), ex);
             }
         }
     }
-    
+
     /**
      * Import multiple audio files and return a detailed ImportResult.
      */
@@ -99,7 +101,9 @@ public class MusicImporter {
             } else {
                 try {
                     Song song = importAudioFile(file);
-                    if (song != null) result.addSuccess(song);
+                    if (song != null) {
+                        result.addSuccess(song);
+                    }
                 } catch (Exception e) {
                     result.addFailure(file, e.getMessage());
                 }
@@ -110,14 +114,16 @@ public class MusicImporter {
     }
 
     /**
-     * Backwards-compatible helper that returns only the successes as a list of songs.
+     * Backwards-compatible helper that returns only the successes as a list of
+     * songs.
      */
     public static List<Song> importAudioFilesList(File[] files) {
         return importAudioFiles(files).getSuccesses();
     }
-    
+
     /**
-     * Import all audio files from a directory and return a detailed ImportResult.
+     * Import all audio files from a directory and return a detailed
+     * ImportResult.
      */
     public static ImportResult importFromDirectoryResult(File directory) {
         ImportResult result = new ImportResult();
@@ -136,7 +142,9 @@ public class MusicImporter {
                 } else if (isAudioFile(file)) {
                     try {
                         Song song = importAudioFile(file);
-                        if (song != null) result.addSuccess(song);
+                        if (song != null) {
+                            result.addSuccess(song);
+                        }
                     } catch (Exception e) {
                         result.addFailure(file, e.getMessage());
                     }
@@ -153,7 +161,7 @@ public class MusicImporter {
     public static List<Song> importFromDirectoryList(File directory) {
         return importFromDirectoryResult(directory).getSuccesses();
     }
-    
+
     /**
      * Check if file is a supported audio format
      */
@@ -161,17 +169,17 @@ public class MusicImporter {
         if (file == null || !file.exists() || !file.isFile()) {
             return false;
         }
-        
+
         String fileName = file.getName().toLowerCase();
         for (String format : SUPPORTED_FORMATS) {
             if (fileName.endsWith("." + format)) {
                 return true;
             }
         }
-        
+
         return false;
     }
-    
+
     /**
      * Get duration of audio file using Java Sound API (fallback)
      */
@@ -186,7 +194,7 @@ public class MusicImporter {
             return 0; // Unknown duration
         }
     }
-    
+
     /**
      * Create a basic song when metadata extraction fails
      */
@@ -194,25 +202,25 @@ public class MusicImporter {
         try {
             String fileName = file.getName();
             String title = fileName.substring(0, fileName.lastIndexOf('.'));
-            
+
             MusicLibrary library = MusicLibrary.getInstance();
             Artist artist = findOrCreateArtist("Unknown Artist", library);
             Album album = findOrCreateAlbum("Unknown Album", artist, library);
-            
+
             int duration = getAudioDuration(file);
-            
+
             Song song = new Song(title, artist, album, duration);
             song.setAudioFile(file);
-            
+
             album.addSong(song);
             library.addSong(song);
-            
+
             return song;
         } catch (Exception e) {
             throw new RuntimeException("Failed to create basic song for " + file.getName(), e);
         }
     }
-    
+
     /**
      * Find existing artist or create new one
      */
@@ -222,29 +230,29 @@ public class MusicImporter {
                 return existingArtist;
             }
         }
-        
+
         Artist newArtist = new Artist(artistName);
         library.addArtist(newArtist);
         return newArtist;
     }
-    
+
     /**
      * Find existing album or create new one
      */
     private static Album findOrCreateAlbum(String albumName, Artist artist, MusicLibrary library) {
         for (Album existingAlbum : library.getAllAlbums()) {
-            if (existingAlbum.getTitle().equals(albumName) && 
-                existingAlbum.getArtist().equals(artist)) {
+            if (existingAlbum.getTitle().equals(albumName)
+                    && existingAlbum.getArtist().equals(artist)) {
                 return existingAlbum;
             }
         }
-        
+
         Album newAlbum = new Album(albumName, artist, LocalDate.now(), "");
         library.addAlbum(newAlbum);
         artist.addAlbum(newAlbum);
         return newAlbum;
     }
-    
+
     /**
      * Get tag value with fallback
      */
@@ -252,7 +260,7 @@ public class MusicImporter {
         if (tag == null) {
             return fallback;
         }
-        
+
         try {
             String value = tag.getFirst(key);
             return (value == null || value.trim().isEmpty()) ? fallback : value.trim();
@@ -260,7 +268,7 @@ public class MusicImporter {
             return fallback;
         }
     }
-    
+
     /**
      * Parse track number from string
      */
@@ -268,7 +276,7 @@ public class MusicImporter {
         if (trackStr == null || trackStr.trim().isEmpty()) {
             return 0;
         }
-        
+
         try {
             // Handle formats like "01/12" or "1 of 12"
             String[] parts = trackStr.split("[/\\s]+");
@@ -277,21 +285,23 @@ public class MusicImporter {
             return 0;
         }
     }
-    
+
     /**
      * Get list of supported file extensions
      */
     public static String[] getSupportedFormats() {
         return SUPPORTED_FORMATS.clone();
     }
-    
+
     /**
      * Get file filter description for file chooser
      */
     public static String getFileFilterDescription() {
         StringBuilder sb = new StringBuilder("Audio Files (");
         for (int i = 0; i < SUPPORTED_FORMATS.length; i++) {
-            if (i > 0) sb.append(", ");
+            if (i > 0) {
+                sb.append(", ");
+            }
             sb.append("*.").append(SUPPORTED_FORMATS[i]);
         }
         sb.append(")");

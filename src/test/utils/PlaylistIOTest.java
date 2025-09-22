@@ -1,4 +1,4 @@
-package com.spotify.clone.utils;
+package utils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,9 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 
-import com.spotify.clone.models.Artist;
-import com.spotify.clone.models.Playlist;
-import com.spotify.clone.models.Song;
+import models.Artist;
+import models.Playlist;
+import models.Song;
 
 public class PlaylistIOTest {
 
@@ -22,7 +22,9 @@ public class PlaylistIOTest {
     public void cleanup() throws Exception {
         // Attempt to remove the playlists.json from the user's home .spotify-clone
         Path userDir = Path.of(System.getProperty("user.home"), ".spotify-clone", "playlists.json");
-        if (Files.exists(userDir)) Files.deleteIfExists(userDir);
+        if (Files.exists(userDir)) {
+            Files.deleteIfExists(userDir);
+        }
     }
 
     @Test
@@ -33,10 +35,10 @@ public class PlaylistIOTest {
         Playlist p = new Playlist("UnitTest Playlist");
         p.addSong(s);
 
-    // Save playlists (will throw on failure)
-    PlaylistIO.savePlaylists(List.of(p));
+        // Save playlists (will throw on failure)
+        PlaylistIO.savePlaylists(List.of(p));
 
-    List<Playlist> loaded = PlaylistIO.loadPlaylists();
+        List<Playlist> loaded = PlaylistIO.loadPlaylists();
         assertNotNull(loaded);
         assertTrue(loaded.stream().anyMatch(pl -> "UnitTest Playlist".equals(pl.getName())), "Loaded playlists should contain the saved playlist");
     }
