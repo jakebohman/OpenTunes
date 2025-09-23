@@ -15,17 +15,18 @@ import models.Playlist;
 import models.Song;
 
 /**
- * Persistence helper for the MusicLibrary. Saves/loads a simple snapshot object
- * to JSON.
+ * Persistence helper for the MusicLibrary. Saves/loads a simple snapshot object to JSON.
  */
 public class MusicLibraryIO {
 
-    private static final String LIBRARY_FILE = "music-library.json";
+    private static final String LIBRARY_FILE = "music-library.json"; // Default file path
     private static final ObjectMapper mapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS); // For better date handling
 
-    // Snapshot DTO used for serialization
+    /*
+     * Snapshot class used for serialization/deserialization of the entire library
+     */
     public static class Snapshot {
 
         private List<Song> songs;
@@ -76,19 +77,31 @@ public class MusicLibraryIO {
         }
     }
 
+    /*
+     * Save library snapshot to file
+     */
     public static void saveLibrary(MusicLibrary lib) throws IOException {
         saveLibrary(lib, new File(LIBRARY_FILE));
     }
 
+    /*
+    * Save library snapshot to file
+    */
     public static void saveLibrary(MusicLibrary lib, File outFile) throws IOException {
         Snapshot snap = new Snapshot(lib.getAllSongs(), lib.getAllArtists(), lib.getAllAlbums(), lib.getAllPlaylists());
         mapper.writerWithDefaultPrettyPrinter().writeValue(outFile, snap);
     }
 
+    /*
+     * Load library snapshot from file, replacing current library content
+     */
     public static void loadLibrary(MusicLibrary lib) throws IOException {
         loadLibrary(lib, new File(LIBRARY_FILE));
     }
 
+    /*
+     * Load library snapshot from file, replacing current library content
+     */
     public static void loadLibrary(MusicLibrary lib, File inFile) throws IOException {
         if (!inFile.exists()) {
             return;

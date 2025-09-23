@@ -11,16 +11,19 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * Represents an album in the music library
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = true) // Ignore unknown properties during JSON deserialization
 public class Album {
 
-    private String title;
-    private Artist artist;
-    private LocalDate releaseDate;
-    private String genre;
-    private List<Song> songs;
-    private String coverImageUrl;
+    private String title; // Album title
+    private Artist artist; // Album artist
+    private LocalDate releaseDate; // Release date
+    private String genre; // Music genre
+    private List<Song> songs; // Songs in the album
+    private String coverImageUrl; // URL to the album cover image
 
+    /*
+     * Constructor for creating a new Album with minimal info
+     */
     public Album(String title, Artist artist) {
         this.title = title;
         this.artist = artist;
@@ -30,7 +33,9 @@ public class Album {
         this.coverImageUrl = "";
     }
 
-    // No-arg constructor for JSON deserialization
+    /*
+     * Default constructor for JSON deserialization
+     */
     public Album() {
         this.title = "";
         this.artist = null;
@@ -40,6 +45,9 @@ public class Album {
         this.coverImageUrl = "";
     }
 
+    /*
+     * Constructor with all fields
+     */
     public Album(String title, Artist artist, LocalDate releaseDate, String genre) {
         this.title = title;
         this.artist = artist;
@@ -49,7 +57,9 @@ public class Album {
         this.coverImageUrl = "";
     }
 
-    // Getters and Setters
+    /*
+     * Getters and setters
+     */
     public String getTitle() {
         return title;
     }

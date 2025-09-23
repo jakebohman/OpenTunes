@@ -14,14 +14,17 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import models.Playlist;
 
 /**
- * Simple JSON-backed persistence for playlists.
+ * Simple JSON-backed persistence for playlists. Store playlists in a JSON file within the user's home directory.
  */
 public class PlaylistIO {
 
-    private static final ObjectMapper MAPPER = createMapper();
-    private static final String DEFAULT_DIR = System.getProperty("user.home") + File.separator + ".spotify-clone";
-    private static final String PLAYLIST_FILE = DEFAULT_DIR + File.separator + "playlists.json";
+    private static final ObjectMapper MAPPER = createMapper(); // Jackson ObjectMapper with JavaTimeModule registered
+    private static final String DEFAULT_DIR = System.getProperty("user.home") + File.separator + ".spotify-clone"; // Default directory for storing app data
+    private static final String PLAYLIST_FILE = DEFAULT_DIR + File.separator + "playlists.json"; // Playlist file path
 
+    /*
+     * Load playlists from the JSON file, returning an empty list if the file doesn't exist or is unreadable
+     */
     public static List<Playlist> loadPlaylists() throws IOException {
         Path dir = Path.of(DEFAULT_DIR);
         if (!Files.exists(dir)) {
@@ -35,6 +38,9 @@ public class PlaylistIO {
         });
     }
 
+    /*
+     * Save the given list of playlists to the JSON file, creating directories as needed
+     */
     public static void savePlaylists(List<Playlist> playlists) throws IOException {
         Path dir = Path.of(DEFAULT_DIR);
         if (!Files.exists(dir)) {
@@ -44,6 +50,9 @@ public class PlaylistIO {
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, playlists);
     }
 
+    /*
+     * Create and configure the Jackson ObjectMapper for JSON serialization/deserialization
+     */
     private static ObjectMapper createMapper() {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());

@@ -10,14 +10,17 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * Represents an artist in the music library
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = true) // Ignore unknown properties during JSON deserialization
 public class Artist {
 
-    private String name;
-    private String biography;
-    private List<Album> albums;
-    private String imageUrl;
+    private String name; // Artist name
+    private String biography; // Artist biography
+    private List<Album> albums; // Albums by the artist
+    private String imageUrl; // URL to the artist image
 
+    /*
+     * Constructor with name only
+     */
     public Artist(String name) {
         this.name = name;
         this.albums = new ArrayList<>();
@@ -25,7 +28,9 @@ public class Artist {
         this.imageUrl = "";
     }
 
-    // No-arg constructor for JSON deserialization
+    /*
+     * Default constructor for JSON deserialization
+     */
     public Artist() {
         this.name = "";
         this.albums = new ArrayList<>();
@@ -33,6 +38,9 @@ public class Artist {
         this.imageUrl = "";
     }
 
+    /*
+     * Constructor with all fields
+     */
     public Artist(String name, String biography, String imageUrl) {
         this.name = name;
         this.biography = biography;
@@ -40,7 +48,9 @@ public class Artist {
         this.albums = new ArrayList<>();
     }
 
-    // Getters and Setters
+    /*
+     * Getters and setters
+     */
     public String getName() {
         return name;
     }

@@ -11,16 +11,19 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 /**
  * Represents a playlist in the music library
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonIgnoreProperties(ignoreUnknown = true) // Ignore unknown properties during JSON deserialization
 public class Playlist {
 
-    private String name;
-    private String description;
-    private List<Song> songs;
-    private LocalDateTime createdDate;
-    private LocalDateTime lastModified;
-    private String coverImageUrl;
+    private String name; // Playlist name, must be unique
+    private String description; // Optional description
+    private List<Song> songs; // Songs in the playlist
+    private LocalDateTime createdDate; // Date the playlist was created
+    private LocalDateTime lastModified; // Date the playlist was last modified
+    private String coverImageUrl; // URL to the playlist cover image
 
+    /*
+     * Constructor with name only
+     */
     public Playlist(String name) {
         this.name = name;
         this.description = "";
@@ -30,7 +33,9 @@ public class Playlist {
         this.coverImageUrl = "";
     }
 
-    // No-arg constructor for JSON deserialization
+    /*
+     * Default constructor for JSON deserialization
+     */
     public Playlist() {
         this.name = "";
         this.description = "";
@@ -40,6 +45,9 @@ public class Playlist {
         this.coverImageUrl = "";
     }
 
+    /*
+     * Constructor with name and description
+     */
     public Playlist(String name, String description) {
         this.name = name;
         this.description = description;
@@ -49,7 +57,78 @@ public class Playlist {
         this.coverImageUrl = "";
     }
 
-    // Getters and Setters
+    /*
+     * Add song to playlist if not already present
+     */
+    public void addSong(Song song) {
+        if (song != null && !songs.contains(song)) {
+            songs.add(song);
+            updateLastModified();
+        }
+    }
+
+    /*
+     * Add song at specific index if not already present
+     */
+    public void addSong(int index, Song song) {
+        if (song != null && !songs.contains(song)) {
+            if (index >= 0 && index <= songs.size()) {
+                songs.add(index, song);
+                updateLastModified();
+            }
+        }
+    }
+
+    /*
+     * Remove song from playlist by object
+     */
+    public void removeSong(Song song) {
+        if (songs.remove(song)) {
+            updateLastModified();
+        }
+    }
+
+    /*
+     * Remove song from playlist by index
+     */
+    public void removeSong(int index) {
+        if (index >= 0 && index < songs.size()) {
+            songs.remove(index);
+            updateLastModified();
+        }
+    }
+
+    /*
+     * Move song from one index to another within the playlist
+     */
+    public void moveSong(int fromIndex, int toIndex) {
+        if (fromIndex >= 0 && fromIndex < songs.size()
+                && toIndex >= 0 && toIndex < songs.size()) {
+            Song song = songs.remove(fromIndex);
+            songs.add(toIndex, song);
+            updateLastModified();
+        }
+    }
+
+    /*
+     * Shuffle the songs in the playlist randomly
+     */
+    public void shuffleSongs() {
+        Collections.shuffle(songs);
+        updateLastModified();
+    }
+
+    /*
+     * Clear all songs from the playlist
+     */
+    public void clearPlaylist() {
+        songs.clear();
+        updateLastModified();
+    }
+
+    /*
+     * Getters and setters
+     */
     public String getName() {
         return name;
     }
@@ -70,54 +149,6 @@ public class Playlist {
 
     public List<Song> getSongs() {
         return new ArrayList<>(songs);
-    }
-
-    public void addSong(Song song) {
-        if (song != null && !songs.contains(song)) {
-            songs.add(song);
-            updateLastModified();
-        }
-    }
-
-    public void addSong(int index, Song song) {
-        if (song != null && !songs.contains(song)) {
-            if (index >= 0 && index <= songs.size()) {
-                songs.add(index, song);
-                updateLastModified();
-            }
-        }
-    }
-
-    public void removeSong(Song song) {
-        if (songs.remove(song)) {
-            updateLastModified();
-        }
-    }
-
-    public void removeSong(int index) {
-        if (index >= 0 && index < songs.size()) {
-            songs.remove(index);
-            updateLastModified();
-        }
-    }
-
-    public void moveSong(int fromIndex, int toIndex) {
-        if (fromIndex >= 0 && fromIndex < songs.size()
-                && toIndex >= 0 && toIndex < songs.size()) {
-            Song song = songs.remove(fromIndex);
-            songs.add(toIndex, song);
-            updateLastModified();
-        }
-    }
-
-    public void shuffleSongs() {
-        Collections.shuffle(songs);
-        updateLastModified();
-    }
-
-    public void clearPlaylist() {
-        songs.clear();
-        updateLastModified();
     }
 
     public LocalDateTime getCreatedDate() {
@@ -147,6 +178,9 @@ public class Playlist {
                 .sum();
     }
 
+    /*
+     * Get formatted duration as H:MM:SS or M:SS
+     */
     public String getFormattedDuration() {
         int totalSeconds = getTotalDurationSeconds();
         int hours = totalSeconds / 3600;
@@ -160,6 +194,9 @@ public class Playlist {
         }
     }
 
+    /*
+     * Update the last modified timestamp to current time
+     */
     private void updateLastModified() {
         this.lastModified = LocalDateTime.now();
     }

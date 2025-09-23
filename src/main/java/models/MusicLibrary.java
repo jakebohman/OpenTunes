@@ -9,12 +9,15 @@ import java.util.stream.Collectors;
  */
 public class MusicLibrary {
 
-    private List<Song> songs;
-    private List<Artist> artists;
-    private List<Album> albums;
-    private List<Playlist> playlists;
-    private static MusicLibrary instance;
+    private List<Song> songs; // All songs in the library
+    private List<Artist> artists; // All artists in the library
+    private List<Album> albums; // All albums in the library
+    private List<Playlist> playlists; // All playlists in the library
+    private static MusicLibrary instance; // Singleton instance
 
+    /*
+     * Private constructor for singleton pattern, restricts the class to a single instance
+     */
     private MusicLibrary() {
         this.songs = new ArrayList<>();
         this.artists = new ArrayList<>();
@@ -22,6 +25,9 @@ public class MusicLibrary {
         this.playlists = new ArrayList<>();
     }
 
+    /*
+     * Get the singleton instance of the music library
+     */
     public static synchronized MusicLibrary getInstance() {
         if (instance == null) {
             instance = new MusicLibrary();
@@ -29,7 +35,10 @@ public class MusicLibrary {
         return instance;
     }
 
-    // Song Management
+    /*
+     * Add a song to the library, ensuring no duplicates by file path
+     * Also adds associated artist and album if they do not already exist
+     */
     public void addSong(Song song) {
         if (song == null) {
             return;
@@ -40,14 +49,14 @@ public class MusicLibrary {
         if (path != null && !path.isEmpty()) {
             for (Song s : songs) {
                 if (path.equals(s.getFilePath())) {
-                    return; // duplicate by filepath
+                    return;
                 }
             }
-        } else {
-            // fallback to equality check if no file path
-            if (songs.contains(song)) {
-                return;
-            }
+        }
+
+        // Avoid adding exact duplicate song objects
+        if (songs.contains(song)) {
+            return;
         }
 
         songs.add(song);
@@ -68,6 +77,10 @@ public class MusicLibrary {
         }
     }
 
+    /*
+     * Remove a song from the library, also removing it from any playlists
+     * and cleaning up empty albums or artists if necessary
+     */
     public void removeSong(Song song) {
         songs.remove(song);
 
@@ -95,22 +108,33 @@ public class MusicLibrary {
         }
     }
 
+    /*
+     * Get a list of all songs in the library
+     */
     public List<Song> getAllSongs() {
         return new ArrayList<>(songs);
     }
 
-    // Artist Management
+    /*
+     * Add an artist to the library if not already present
+     */
     public void addArtist(Artist artist) {
         if (artist != null && !artists.contains(artist)) {
             artists.add(artist);
         }
     }
 
+    /*
+     * Get a list of all artists in the library
+     */
     public List<Artist> getAllArtists() {
         return new ArrayList<>(artists);
     }
 
-    // Album Management
+    /*
+     * Add an album to the library, ensuring no duplicates
+     * Also adds the associated artist if not already present
+     */
     public void addAlbum(Album album) {
         if (album != null && !albums.contains(album)) {
             albums.add(album);
@@ -123,26 +147,39 @@ public class MusicLibrary {
         }
     }
 
+    /*
+     * Get a list of all albums in the library
+     */
     public List<Album> getAllAlbums() {
         return new ArrayList<>(albums);
     }
 
-    // Playlist Management
+    /*
+     * Add a playlist to the library if not already present
+     */
     public void addPlaylist(Playlist playlist) {
         if (playlist != null && !playlists.contains(playlist)) {
             playlists.add(playlist);
         }
     }
 
+    /*
+     * Remove a playlist from the library
+     */
     public void removePlaylist(Playlist playlist) {
         playlists.remove(playlist);
     }
 
+    /*
+     * Get a list of all playlists in the library
+     */
     public List<Playlist> getAllPlaylists() {
         return new ArrayList<>(playlists);
     }
 
-    // Search Functions
+    /*
+     * Search functions for songs, artists, albums, and playlists by name or relevant fields
+     */
     public List<Song> searchSongs(String query) {
         String lowerQuery = query.toLowerCase();
         return songs.stream()
@@ -176,7 +213,9 @@ public class MusicLibrary {
                 .collect(Collectors.toList());
     }
 
-    // Filter Functions
+    /*
+     * Get songs by specific artist, album, or genre
+     */
     public List<Song> getSongsByArtist(Artist artist) {
         return songs.stream()
                 .filter(song -> song.getArtist().equals(artist))
@@ -201,7 +240,9 @@ public class MusicLibrary {
                 .collect(Collectors.toList());
     }
 
-    // Statistics
+    /*
+     * Get aggregate statistics about the library (total songs, artists, albums, playlists, total duration)
+     */
     public int getTotalSongCount() {
         return songs.size();
     }
@@ -224,7 +265,9 @@ public class MusicLibrary {
                 .sum();
     }
 
-    // Utility methods
+    /*
+     * Clear the entire library
+     */
     public void clearLibrary() {
         songs.clear();
         artists.clear();
@@ -232,6 +275,9 @@ public class MusicLibrary {
         playlists.clear();
     }
 
+    /*
+     * Get a list of all unique genres in the library
+     */
     public List<String> getAllGenres() {
         return songs.stream()
                 .map(Song::getGenre)

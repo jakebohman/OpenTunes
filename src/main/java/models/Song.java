@@ -12,17 +12,20 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Song {
 
-    private String title;
-    private Artist artist;
-    private Album album;
-    private int durationSeconds;
-    private String genre;
-    private int trackNumber;
-    private LocalDate dateAdded;
-    private File audioFile;
-    private String filePath;
+    private String title; // Song title
+    private Artist artist; // Song artist
+    private Album album; // Song album
+    private int durationSeconds; // Duration in seconds
+    private String genre; // Genre
+    private int trackNumber; // Track number
+    private LocalDate dateAdded; // Date the song was added
+    private File audioFile; // Audio file
+    private String filePath; // File path
     private long fileSizeBytes;
 
+    /*
+     * Constructor with title and artist only
+     */
     public Song(String title, Artist artist) {
         this.title = title;
         this.artist = artist;
@@ -33,7 +36,9 @@ public class Song {
         this.fileSizeBytes = 0;
     }
 
-    // No-arg constructor for JSON deserialization
+    /*
+     * Default constructor for JSON deserialization
+     */
     public Song() {
         this.title = "";
         this.artist = null;
@@ -45,6 +50,9 @@ public class Song {
         this.fileSizeBytes = 0;
     }
 
+    /*
+     * Constructor with all fields except file and file path
+     */
     public Song(String title, Artist artist, Album album, int durationSeconds) {
         this.title = title;
         this.artist = artist;
@@ -56,7 +64,9 @@ public class Song {
         this.fileSizeBytes = 0;
     }
 
-    // Getters and Setters
+    /*
+     * Getters and setters
+     */
     public String getTitle() {
         return title;
     }
@@ -139,12 +149,18 @@ public class Song {
         return fileSizeBytes;
     }
 
+    /*
+     * Get formatted duration as mm:ss
+     */
     public String getFormattedDuration() {
         int minutes = durationSeconds / 60;
         int seconds = durationSeconds % 60;
         return String.format("%d:%02d", minutes, seconds);
     }
 
+    /*
+     * Get formatted file size as B, KB, or MB
+     */
     public String getFormattedFileSize() {
         if (fileSizeBytes < 1024) {
             return fileSizeBytes + " B";

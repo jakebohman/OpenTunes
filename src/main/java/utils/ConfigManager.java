@@ -8,19 +8,25 @@ import java.util.Properties;
 
 /**
  * Configuration manager for the application
+ * Handles loading, saving, and accessing config properties (Settings)
  */
 public class ConfigManager {
 
-    private static final String CONFIG_FILE = "open-tunes.properties";
-    private static ConfigManager instance;
-    private Properties properties;
+    private static final String CONFIG_FILE = "open-tunes.properties"; // Config file name
+    private static ConfigManager instance; // Singleton instance
+    private Properties properties; // Properties object to hold config key-value pairs
 
+    /*
+     * Private constructor for singleton pattern
+     */
     private ConfigManager() {
         properties = new Properties();
         loadConfig();
     }
 
-    // Get singleton instance
+    /*
+     * Get the singleton instance of ConfigManager
+     */
     public static synchronized ConfigManager getInstance() {
         if (instance == null) {
             instance = new ConfigManager();
@@ -28,6 +34,9 @@ public class ConfigManager {
         return instance;
     }
 
+    /*
+     * Load config from file, or create defaults if file doesn't exist
+     */
     private void loadConfig() {
         File configFile = new File(CONFIG_FILE);
         if (configFile.exists()) {
@@ -38,11 +47,12 @@ public class ConfigManager {
             }
         }
 
-        // Set default values
         setDefaultValues();
     }
 
-    // Set default config values if not present
+    /*
+     * Set default config values if not present
+     */
     private void setDefaultValues() {
         if (!properties.containsKey("volume")) {
             properties.setProperty("volume", "0.5");
@@ -58,6 +68,9 @@ public class ConfigManager {
         }
     }
 
+    /*
+     * Save current config to file
+     */
     public void saveConfig() throws IOException {
         try (FileOutputStream fos = new FileOutputStream(CONFIG_FILE)) {
             properties.store(fos, "Spotify Clone Configuration");
@@ -65,8 +78,7 @@ public class ConfigManager {
     }
 
     /**
-     * Safe wrapper to persist config without throwing (returns success
-     * boolean).
+     * Safe wrapper to persist config without throwing (returns success boolean).
      */
     public boolean saveConfigSafe() {
         try {
@@ -78,6 +90,9 @@ public class ConfigManager {
         }
     }
 
+    /*
+     * Getters and setters for config properties
+     */
     public String getString(String key, String defaultValue) {
         return properties.getProperty(key, defaultValue);
     }

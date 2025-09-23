@@ -26,7 +26,7 @@ public class MusicImporter {
 
     private static final String[] SUPPORTED_FORMATS = {
         "mp3", "wav", "flac", "m4a", "ogg"
-    };
+    }; // Supported audio file extensions
 
     /**
      * Import a single audio file
@@ -114,16 +114,14 @@ public class MusicImporter {
     }
 
     /**
-     * Backwards-compatible helper that returns only the successes as a list of
-     * songs.
+     * Backwards-compatible helper that returns only the successes as a list of songs.
      */
     public static List<Song> importAudioFilesList(File[] files) {
         return importAudioFiles(files).getSuccesses();
     }
 
     /**
-     * Import all audio files from a directory and return a detailed
-     * ImportResult.
+     * Import all audio files from a directory and return a detailed ImportResult.
      */
     public static ImportResult importFromDirectoryResult(File directory) {
         ImportResult result = new ImportResult();

@@ -52,30 +52,36 @@ import utils.PlaylistIO;
  */
 public class MainWindow {
 
-    private Stage primaryStage;
-    private MusicLibrary musicLibrary;
-    private AudioPlayer audioPlayer;
+    private Stage primaryStage; // primary stage
+    private MusicLibrary musicLibrary; // the music library
+    private AudioPlayer audioPlayer; // audio player controller
 
     // UI Components
-    private ListView<Song> songListView;
-    private ListView<Playlist> playlistListView;
-    private Label nowPlayingLabel;
-    private Label timeLabel;
-    private Slider progressSlider;
-    private Slider volumeSlider;
-    private Button playPauseButton;
-    private Button stopButton;
-    private Button previousButton;
-    private Button nextButton;
-    private Button loopButton;
-    private TextField searchField;
+    private ListView<Song> songListView; // list of songs
+    private ListView<Playlist> playlistListView; // list of playlists
+    private Label nowPlayingLabel; // label showing current song
+    private Label timeLabel; // label showing current time / total duration
+    private Slider progressSlider; // slider for song progress
+    private Slider volumeSlider; // slider for volume
+    private Button playPauseButton; // play/pause button
+    private Button stopButton; // stop button
+    private Button previousButton; // previous button
+    private Button nextButton; // next button
+    private Button loopButton; // loop button
+    private TextField searchField; // search field
+
+    // Placeholder ID used for the 'View Full Library' top list item
+    private static final String LIBRARY_PLACEHOLDER_ID = "__VIEW_LIBRARY__";
 
     // Current state
-    private Playlist currentPlaylist;
-    private int currentSongIndex = -1;
-    private boolean isSeeking = false;
-    private boolean loopCurrent = false;
+    private Playlist currentPlaylist; // currently loaded playlist (null = library mode)
+    private int currentSongIndex = -1; // index of the currently playing song in the list, -1 if none
+    private boolean isSeeking = false; // true if user is currently dragging the progress slider
+    private boolean loopCurrent = false; // true if current song should loop when finished
 
+    /*
+     * Constructor
+     */
     public MainWindow(Stage primaryStage) {
         this.primaryStage = primaryStage;
         this.musicLibrary = MusicLibrary.getInstance();
@@ -96,6 +102,9 @@ public class MainWindow {
         initializeUI();
     }
 
+    /*
+     * Initialize the main UI components and layout
+     */
     private void initializeUI() {
         primaryStage.setTitle("OpenTunes");
 
@@ -173,6 +182,9 @@ public class MainWindow {
         primaryStage.show();
     }
 
+    /*
+     * Create the top menu bar with menus and items
+     */
     private MenuBar createMenuBar() {
         MenuBar menuBar = new MenuBar();
         menuBar.getStyleClass().add("menu-bar");
@@ -207,6 +219,9 @@ public class MainWindow {
         return menuBar;
     }
 
+    /*
+     * Create the center pane with library and playlists split
+     */
     private SplitPane createCenterPane() {
         SplitPane splitPane = new SplitPane();
 
@@ -222,6 +237,9 @@ public class MainWindow {
         return splitPane;
     }
 
+    /*
+     * Create the library pane with search and song list
+     */
     private VBox createLibraryPane() {
         VBox libraryPane = new VBox(10);
         libraryPane.setPadding(new Insets(10));
@@ -238,99 +256,8 @@ public class MainWindow {
         songsLabel.setLabelFor(songListView);
 
         songListView = new ListView<>();
-        songListView.setCellFactory(listView -> {
-            SongListCell cell = new SongListCell();
-            ContextMenu menu = new ContextMenu();
-            MenuItem edit = new MenuItem("Edit Metadata");
-            edit.setOnAction(e -> {
-                Song s = cell.getItem();
-                if (s != null) {
-                    editSongMetadata(s);
-                }
-            });
-
-            MenuItem addTo = new MenuItem("Add to Playlist...");
-            addTo.setOnAction(e -> {
-                Song s = cell.getItem();
-                if (s != null) {
-                    addSongToPlaylist(s);
-                }
-            });
-
-            MenuItem remove = new MenuItem("Remove from playlist...");
-            remove.setOnAction(e -> {
-                Song s = cell.getItem();
-                if (s == null) {
-                    return;
-                }
-
-                // Only show playlists that actually contain this song (mirrors Add to Playlist flow)
-                List<Playlist> allPlaylists = musicLibrary.getAllPlaylists();
-                if (allPlaylists == null || allPlaylists.isEmpty()) {
-                    return;
-                }
-                List<Playlist> containing = new java.util.ArrayList<>();
-                for (Playlist p : allPlaylists) {
-                    if (p.getSongs().contains(s)) {
-                        containing.add(p);
-                    }
-                }
-                if (containing.isEmpty()) {
-                    Alert info = new Alert(Alert.AlertType.INFORMATION);
-                    info.setTitle("Not Found");
-                    info.setHeaderText("Song not in any playlist");
-                    info.setContentText("This song isn't present in any playlist.");
-                    info.showAndWait();
-                    return;
-                }
-                ChoiceDialog<Playlist> dialog = new ChoiceDialog<>(containing.contains(currentPlaylist) ? currentPlaylist : containing.get(0), containing);
-                dialog.setTitle("Remove from Playlist");
-                dialog.setHeaderText("Choose a playlist to remove the song from");
-                dialog.setContentText("Playlist:");
-                dialog.showAndWait().ifPresent(chosen -> {
-                    if (chosen == null) {
-                        return;
-                    }
-                    if (!chosen.getSongs().contains(s)) {
-                        // Inform user the song isn't in that playlist
-                        Alert info = new Alert(Alert.AlertType.INFORMATION);
-                        info.setTitle("Not Found");
-                        info.setHeaderText("Song not in playlist");
-                        info.setContentText("The selected playlist '" + chosen.getName() + "' does not contain this song.");
-                        info.showAndWait();
-                        return;
-                    }
-                    // Confirm removal
-                    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirm.setTitle("Remove Song");
-                    confirm.setHeaderText("Remove '" + s.getTitle() + "' from playlist '" + chosen.getName() + "'");
-                    confirm.setContentText("Are you sure?");
-                    confirm.showAndWait().ifPresent(bt -> {
-                        if (bt.getButtonData().isDefaultButton()) {
-                            chosen.removeSong(s);
-                            try {
-                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                            } catch (IOException ex) {
-                                Alert err = new Alert(Alert.AlertType.ERROR);
-                                err.setTitle("Save Error");
-                                err.setHeaderText("Failed to persist playlists");
-                                err.setContentText(ex.getMessage());
-                                err.showAndWait();
-                            }
-                            // If the user is viewing the playlist we removed from, reload it
-                            if (currentPlaylist != null && currentPlaylist.equals(chosen)) {
-                                loadPlaylist(currentPlaylist);
-                            }
-                            refreshPlaylistList();
-                        }
-                    });
-                });
-            });
-
-            menu.getItems().addAll(edit, addTo, remove);
-            cell.setContextMenu(menu);
-            return cell;
-        });
+        // Use the shared/common cell factory so both library and playlist modes have identical menus
+        setCommonSongCellFactory();
         songListView.setId("song-list");
         songListView.setAccessibleText("Songs list");
         songListView.setOnMouseClicked(e -> {
@@ -350,6 +277,9 @@ public class MainWindow {
         return libraryPane;
     }
 
+    /*
+     * Create the playlist pane with playlist list and controls
+     */
     private VBox createPlaylistPane() {
         VBox playlistPane = new VBox(10);
         playlistPane.setPadding(new Insets(10));
@@ -363,60 +293,73 @@ public class MainWindow {
         addPlaylistButton.setOnAction(e -> createNewPlaylist());
         addPlaylistButton.getStyleClass().add("add-playlist-button");
 
-        // Slightly raise the '+' button to align with the label
+        // Slightly raise the '+' button to align with the "Playlists" label
         addPlaylistButton.setTranslateY(-4);
         playlistHeader.getChildren().addAll(playlistLabel, addPlaylistButton);
-
-        // 'Library' selector button at the top of the playlists pane
-        Button libraryButton = new Button("View Full Library");
-        libraryButton.setOnAction(e -> selectLibrary());
-        libraryButton.getStyleClass().add("library-button");
-        libraryButton.setId("btn-view-full-library");
-        libraryButton.setTooltip(new javafx.scene.control.Tooltip("Show the full music library"));
 
         // Playlists list
         playlistListView = new ListView<>();
         playlistListView.setCellFactory(listView -> {
             PlaylistListCell cell = new PlaylistListCell();
-            ContextMenu menu = new ContextMenu();
-            MenuItem delete = new MenuItem("Delete Playlist");
-            delete.setOnAction(e -> {
-                Playlist p = cell.getItem();
-                if (p != null) {
-                    Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-                    confirm.setTitle("Delete Playlist");
-                    confirm.setHeaderText("Delete playlist '" + p.getName() + "'");
-                    confirm.setContentText("Are you sure? This action cannot be undone.");
-                    confirm.showAndWait().ifPresent(bt -> {
-                        if (bt.getButtonData().isDefaultButton()) {
-                            musicLibrary.removePlaylist(p);
-                            try {
-                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                            } catch (IOException ex) {
-                                Alert err = new Alert(Alert.AlertType.ERROR);
-                                err.setTitle("Save Error");
-                                err.setHeaderText("Failed to persist playlists");
-                                err.setContentText(ex.getMessage());
-                                err.showAndWait();
-                            }
-                            refreshPlaylistList();
-                            if (currentPlaylist != null && currentPlaylist.equals(p)) {
-                                currentPlaylist = null;
-                                refreshSongList();
-                            }
-                        }
-                    });
+
+            // Update context menu depending on which playlist is set on the cell.
+            cell.itemProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal == null) {
+                    cell.setContextMenu(null);
+                    return;
                 }
+
+                // If this is the library placeholder, don't provide delete option
+                if (LIBRARY_PLACEHOLDER_ID.equals(newVal.getName())) {
+                    cell.setContextMenu(null);
+                    return;
+                }
+
+                ContextMenu menu = new ContextMenu();
+                MenuItem delete = new MenuItem("Delete Playlist");
+                delete.setOnAction(e -> {
+                    Playlist p = cell.getItem();
+                    if (p != null) {
+                        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                        confirm.setTitle("Delete Playlist");
+                        confirm.setHeaderText("Delete playlist '" + p.getName() + "'");
+                        confirm.setContentText("Are you sure? This action cannot be undone.");
+                        confirm.showAndWait().ifPresent(bt -> {
+                            if (bt.getButtonData().isDefaultButton()) {
+                                musicLibrary.removePlaylist(p);
+                                try {
+                                    PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                                } catch (IOException ex) {
+                                    Alert err = new Alert(Alert.AlertType.ERROR);
+                                    err.setTitle("Save Error");
+                                    err.setHeaderText("Failed to persist playlists");
+                                    err.setContentText(ex.getMessage());
+                                    err.showAndWait();
+                                }
+                                refreshPlaylistList();
+                                if (currentPlaylist != null && currentPlaylist.equals(p)) {
+                                    currentPlaylist = null;
+                                    refreshSongList();
+                                }
+                            }
+                        });
+                    }
+                });
+                menu.getItems().add(delete);
+                cell.setContextMenu(menu);
             });
-            menu.getItems().add(delete);
-            cell.setContextMenu(menu);
+
             return cell;
         });
         playlistListView.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) {
                 Playlist selectedPlaylist = playlistListView.getSelectionModel().getSelectedItem();
                 if (selectedPlaylist != null) {
-                    loadPlaylist(selectedPlaylist);
+                    if (LIBRARY_PLACEHOLDER_ID.equals(selectedPlaylist.getName())) {
+                        selectLibrary();
+                    } else {
+                        loadPlaylist(selectedPlaylist);
+                    }
                 }
             }
         });
@@ -426,12 +369,16 @@ public class MainWindow {
         playlistListView.setId("playlist-list");
         playlistListView.setAccessibleText("Playlists list");
 
-        playlistPane.getChildren().addAll(playlistHeader, libraryButton, playlistListView);
+        // Add header and the playlist list (the top item represents the library)
+        playlistPane.getChildren().addAll(playlistHeader, playlistListView);
         VBox.setVgrow(playlistListView, Priority.ALWAYS);
 
         return playlistPane;
     }
 
+    /*
+     * Create the bottom controls with playback buttons, progress, and volume
+     */
     private VBox createBottomControls() {
         VBox bottomControls = new VBox(5);
         bottomControls.setPadding(new Insets(10));
@@ -554,6 +501,9 @@ public class MainWindow {
         return bottomControls;
     }
 
+    /*
+     * Setup listeners for audio player events
+     */
     private void setupAudioPlayerListeners() {
         audioPlayer.addListener(new AudioPlayer.AudioPlayerListener() {
             @Override
@@ -564,9 +514,9 @@ public class MainWindow {
             }
 
             @Override
-            public void onPlayStateChanged(boolean isPlaying) {
+            public void onPlayStateChanged(controllers.AudioPlayer.PlaybackState state) {
                 Platform.runLater(() -> {
-                    playPauseButton.setText(isPlaying ? "⏸" : "▶");
+                    playPauseButton.setText(state == controllers.AudioPlayer.PlaybackState.PLAYING ? "⏸" : "▶");
                 });
             }
 
@@ -627,17 +577,39 @@ public class MainWindow {
         });
     }
 
-    // Event handlers and utility methods would continue here...
-    // This is getting quite long, so I'll create separate methods for the remaining functionality
+    /*
+     * Format time in seconds to M:SS format
+     */
     private String formatTime(long seconds) {
         long minutes = seconds / 60;
         long remainingSeconds = seconds % 60;
         return String.format("%d:%02d", minutes, remainingSeconds);
     }
 
+    /*
+     * Refresh the song list to show all songs in the library
+     */
     private void refreshSongList() {
         songListView.getItems().clear();
         songListView.getItems().addAll(musicLibrary.getAllSongs());
+    }
+
+    /*
+     * Refresh the playlist list to show all playlists, with the library placeholder on top
+     */
+    private void refreshPlaylistList() {
+        playlistListView.getItems().clear();
+        // Add the library placeholder as the first item
+        Playlist placeholder = new Playlist(LIBRARY_PLACEHOLDER_ID);
+        playlistListView.getItems().add(placeholder);
+
+        // Add all user playlists after the placeholder
+        for (Playlist p : musicLibrary.getAllPlaylists()) {
+            // Skip any playlists that accidentally have the reserved placeholder id
+            if (p != null && !LIBRARY_PLACEHOLDER_ID.equals(p.getName())) {
+                playlistListView.getItems().add(p);
+            }
+        }
     }
 
     /**
@@ -674,11 +646,6 @@ public class MainWindow {
         }
     }
 
-    private void refreshPlaylistList() {
-        playlistListView.getItems().clear();
-        playlistListView.getItems().addAll(musicLibrary.getAllPlaylists());
-    }
-
     /**
      * Show the full library (deselect any playlist)
      */
@@ -687,14 +654,33 @@ public class MainWindow {
         // Refresh song list to show entire library
         refreshSongList();
         // Clear playlist selection
-        playlistListView.getSelectionModel().clearSelection();
-        // update UI if needed
-        nowPlayingLabel.setText("No song playing");
-        currentSongIndex = -1;
-        // Configure song list for library mode (default cell factory)
+        // Select the placeholder top item to indicate library is active
+        if (!playlistListView.getItems().isEmpty()) {
+            playlistListView.getSelectionModel().select(0);
+        }
+
+        // Configure song list for library mode (shared factory)
+        setCommonSongCellFactory();
+    }
+
+    /*
+     * Configure the song list for playlist mode (drag-and-drop reordering, playlist-specific menu)
+     */
+    private void configureSongListForPlaylistMode() {
+        // Use the shared/common cell factory so playlist mode shows the same menu as library mode
+        setCommonSongCellFactory();
+    }
+
+    /**
+     * Install the single shared song cell factory (library-style) on the
+     * songListView. This ensures library and playlist modes have identical
+     * right-click menus.
+     */
+    private void setCommonSongCellFactory() {
         songListView.setCellFactory(listView -> {
             SongListCell cell = new SongListCell();
             ContextMenu menu = new ContextMenu();
+
             MenuItem edit = new MenuItem("Edit Metadata");
             edit.setOnAction(e -> {
                 Song s = cell.getItem();
@@ -711,28 +697,108 @@ public class MainWindow {
                 }
             });
 
-            menu.getItems().addAll(edit, addTo);
-            cell.setContextMenu(menu);
-            return cell;
-        });
-    }
-
-    private void configureSongListForPlaylistMode() {
-        // Configure cell factory with context menu for removing songs when viewing a playlist
-        songListView.setCellFactory(listView -> {
-            SongListCell cell = new SongListCell();
-            ContextMenu menu = new ContextMenu();
             MenuItem remove = new MenuItem("Remove from playlist...");
             remove.setOnAction(e -> {
                 Song s = cell.getItem();
-                if (currentPlaylist != null && s != null) {
+                if (s == null) {
+                    return;
+                }
+
+                // Only show playlists that actually contain this song
+                List<Playlist> allPlaylists = musicLibrary.getAllPlaylists();
+                if (allPlaylists == null || allPlaylists.isEmpty()) {
+                    return;
+                }
+                List<Playlist> containing = new java.util.ArrayList<>();
+                for (Playlist p : allPlaylists) {
+                    if (p.getSongs().contains(s)) {
+                        containing.add(p);
+                    }
+                }
+                // If no playlists contain this song, inform the user
+                if (containing.isEmpty()) {
+                    Alert info = new Alert(Alert.AlertType.INFORMATION);
+                    info.setTitle("Not Found");
+                    info.setHeaderText("Song not in any playlist");
+                    info.setContentText("This song isn't present in any playlist.");
+                    info.showAndWait();
+                    return;
+                }
+                // If only one playlist contains this song, skip the choice dialog and confirm removal
+                ChoiceDialog<Playlist> dialog = new ChoiceDialog<>(containing.contains(currentPlaylist) ? currentPlaylist : containing.get(0), containing);
+                dialog.setTitle("Remove from Playlist");
+                dialog.setHeaderText("Choose a playlist to remove the song from");
+                dialog.setContentText("Playlist:");
+                dialog.showAndWait().ifPresent(chosen -> {
+                    if (chosen == null) {
+                        return;
+                    }
+                    if (!chosen.getSongs().contains(s)) {
+                        Alert info = new Alert(Alert.AlertType.INFORMATION);
+                        info.setTitle("Not Found");
+                        info.setHeaderText("Song not in playlist");
+                        info.setContentText("The selected playlist '" + chosen.getName() + "' does not contain this song.");
+                        info.showAndWait();
+                        return;
+                    }
                     Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
                     confirm.setTitle("Remove Song");
-                    confirm.setHeaderText("Remove '" + s.getTitle() + "' from playlist '" + currentPlaylist.getName() + "'");
+                    confirm.setHeaderText("Remove '" + s.getTitle() + "' from playlist '" + chosen.getName() + "'");
                     confirm.setContentText("Are you sure?");
                     confirm.showAndWait().ifPresent(bt -> {
                         if (bt.getButtonData().isDefaultButton()) {
-                            currentPlaylist.removeSong(s);
+                            chosen.removeSong(s);
+                            try {
+                                PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
+                            } catch (IOException ex) {
+                                Alert err = new Alert(Alert.AlertType.ERROR);
+                                err.setTitle("Save Error");
+                                err.setHeaderText("Failed to persist playlists");
+                                err.setContentText(ex.getMessage());
+                                err.showAndWait();
+                            }
+                            // If the user is viewing the playlist we removed from, reload it
+                            if (currentPlaylist != null && currentPlaylist.equals(chosen)) {
+                                loadPlaylist(currentPlaylist);
+                            }
+                            refreshPlaylistList();
+                        }
+                    });
+                });
+            });
+
+            menu.getItems().addAll(edit, addTo, remove);
+            cell.setContextMenu(menu);
+
+            // If a playlist is active, enable drag-and-drop reordering (playlist-only behavior)
+            if (currentPlaylist != null) {
+                cell.setOnDragDetected(event -> {
+                    if (cell.getItem() == null) {
+                        return;
+                    }
+                    Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(String.valueOf(songListView.getItems().indexOf(cell.getItem())));
+                    db.setContent(content);
+                    event.consume();
+                });
+
+                cell.setOnDragOver(event -> {
+                    Dragboard db = event.getDragboard();
+                    if (db.hasString()) {
+                        event.acceptTransferModes(TransferMode.MOVE);
+                    }
+                    event.consume();
+                });
+
+                cell.setOnDragDropped(event -> {
+                    Dragboard db = event.getDragboard();
+                    boolean success = false;
+                    if (db.hasString()) {
+                        int draggedIndex = Integer.parseInt(db.getString());
+                        int thisIndex = cell.getIndex();
+                        if (currentPlaylist != null) {
+                            currentPlaylist.moveSong(draggedIndex, thisIndex);
                             try {
                                 PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
                             } catch (IOException ex) {
@@ -743,62 +809,21 @@ public class MainWindow {
                                 err.showAndWait();
                             }
                             loadPlaylist(currentPlaylist);
+                            success = true;
                         }
-                    });
-                }
-            });
-            menu.getItems().add(remove);
-            cell.setContextMenu(menu);
-
-            // Drag handlers for reordering
-            cell.setOnDragDetected(event -> {
-                if (cell.getItem() == null) {
-                    return;
-                }
-                Dragboard db = cell.startDragAndDrop(TransferMode.MOVE);
-                ClipboardContent content = new ClipboardContent();
-                content.putString(String.valueOf(songListView.getItems().indexOf(cell.getItem())));
-                db.setContent(content);
-                event.consume();
-            });
-
-            cell.setOnDragOver(event -> {
-                Dragboard db = event.getDragboard();
-                if (db.hasString()) {
-                    event.acceptTransferModes(TransferMode.MOVE);
-                }
-                event.consume();
-            });
-
-            cell.setOnDragDropped(event -> {
-                Dragboard db = event.getDragboard();
-                boolean success = false;
-                if (db.hasString()) {
-                    int draggedIndex = Integer.parseInt(db.getString());
-                    int thisIndex = cell.getIndex();
-                    if (currentPlaylist != null) {
-                        currentPlaylist.moveSong(draggedIndex, thisIndex);
-                        try {
-                            PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                        } catch (IOException ex) {
-                            Alert err = new Alert(Alert.AlertType.ERROR);
-                            err.setTitle("Save Error");
-                            err.setHeaderText("Failed to persist playlists");
-                            err.setContentText(ex.getMessage());
-                            err.showAndWait();
-                        }
-                        loadPlaylist(currentPlaylist);
-                        success = true;
                     }
-                }
-                event.setDropCompleted(success);
-                event.consume();
-            });
+                    event.setDropCompleted(success);
+                    event.consume();
+                });
+            }
 
             return cell;
         });
     }
 
+    /*
+     * Perform a search in the music library and update the song list
+     */
     private void performSearch(String query) {
         if (query == null || query.trim().isEmpty()) {
             refreshSongList();
@@ -809,6 +834,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Play the specified song and update UI accordingly
+     */
     private void playSong(Song song) {
         if (song == null) {
             return;
@@ -828,6 +856,9 @@ public class MainWindow {
         songListView.getSelectionModel().select(song);
     }
 
+    /*
+     * Edit metadata of the specified song via a dialog
+     */
     private void editSongMetadata(Song song) {
         if (song == null) {
             return;
@@ -942,6 +973,9 @@ public class MainWindow {
         });
     }
 
+    /*
+     * Add the specified song to a playlist (existing or new)
+     */
     private void addSongToPlaylist(Song song) {
         if (song == null) {
             return;
@@ -984,6 +1018,9 @@ public class MainWindow {
         });
     }
 
+    /*
+     * Toggle play/pause state of the audio player
+     */
     private void togglePlayPause() {
         if (audioPlayer.isPlaying()) {
             audioPlayer.pause();
@@ -992,6 +1029,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Stop playback and reset UI state
+     */
     private void stop() {
         audioPlayer.stop();
         // Reset UI state
@@ -1001,6 +1041,9 @@ public class MainWindow {
         nowPlayingLabel.setText("No song playing");
     }
 
+    /*
+     * Play the next song in the current list (playlist or library)
+     */
     private void playNext() {
         List<Song> currentList;
         if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
@@ -1029,6 +1072,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Play the previous song in the current list (playlist or library). If at the start, restart the current track.
+     */
     private void playPrevious() {
         List<Song> currentList;
         if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
@@ -1063,6 +1109,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Seek to the position indicated by the progress slider
+     */
     private void seekToPosition() {
         try {
             double percent = progressSlider.getValue();
@@ -1077,6 +1126,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Import music files or a folder, updating the library and UI accordingly
+     */
     private void importMusic() {
         try {
             ConfigManager config = ConfigManager.getInstance();
@@ -1189,6 +1241,9 @@ public class MainWindow {
         }
     }
 
+    /*
+     * Create a new playlist via a dialog and update UI accordingly
+     */
     private void createNewPlaylist() {
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("New Playlist");
@@ -1215,6 +1270,9 @@ public class MainWindow {
         });
     }
 
+    /*
+     * Load and display the specified playlist in the song list
+     */
     private void loadPlaylist(Playlist playlist) {
         if (playlist == null) {
             return;
@@ -1227,6 +1285,9 @@ public class MainWindow {
         configureSongListForPlaylistMode();
     }
 
+    /*
+     * Show the About dialog with application information
+     */
     private void showAbout() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("About");

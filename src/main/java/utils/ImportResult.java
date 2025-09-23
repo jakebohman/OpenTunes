@@ -8,12 +8,12 @@ import java.util.List;
 import models.Song;
 
 /**
- * Result wrapper for import operations.
+ * Result wrapper for import music file operations.
  */
 public class ImportResult {
 
-    private final List<Song> successes = new ArrayList<>();
-    private final List<ImportFailure> failures = new ArrayList<>();
+    private final List<Song> successes = new ArrayList<>(); // successfully imported songs
+    private final List<ImportFailure> failures = new ArrayList<>(); // failed imports with reasons
 
     public void addSuccess(Song s) {
         if (s != null) {
