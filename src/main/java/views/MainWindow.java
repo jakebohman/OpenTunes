@@ -9,6 +9,7 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -54,7 +55,7 @@ public class MainWindow {
 
     private Stage primaryStage; // primary stage
     private MusicLibrary musicLibrary; // the music library
-    private AudioPlayer audioPlayer; // audio player controller
+    private MusicPlayerController controller; // playback controller
 
     // UI Components
     private ListView<Song> songListView; // list of songs
@@ -75,7 +76,6 @@ public class MainWindow {
 
     // Current state
     private Playlist currentPlaylist; // currently loaded playlist (null = library mode)
-    private int currentSongIndex = -1; // index of the currently playing song in the list, -1 if none
     private boolean isSeeking = false; // true if user is currently dragging the progress slider
     private boolean loopCurrent = false; // true if current song should loop when finished
 
@@ -84,8 +84,8 @@ public class MainWindow {
      */
     public MainWindow(Stage primaryStage) {
         this.primaryStage = primaryStage;
-        this.musicLibrary = MusicLibrary.getInstance();
-        this.audioPlayer = new AudioPlayer();
+    this.musicLibrary = MusicLibrary.getInstance();
+    this.controller = new MusicPlayerController(this.musicLibrary);
         // Load persisted library and playlists at startup
         try {
             MusicLibraryIO.loadLibrary(musicLibrary);
@@ -119,12 +119,22 @@ public class MainWindow {
         SplitPane centerPane = createCenterPane();
         mainLayout.setCenter(centerPane);
 
+    // After UI lists are created, inform controller about current list (library mode)
+    controller.setCurrentList(songListView.getItems());
+
         // Create bottom controls
         VBox bottomControls = createBottomControls();
         mainLayout.setBottom(bottomControls);
 
         // Create scene
         Scene scene = new Scene(mainLayout, 1200, 800);
+
+        // Load window icon
+        try {
+            Image icon = new Image(getClass().getResourceAsStream("/note_icon.png"));
+            primaryStage.getIcons().add(icon);
+        } catch (Exception ignored) {
+        }
 
         // Load css
         try {
@@ -398,7 +408,7 @@ public class MainWindow {
         timeLabel = new Label("0:00 / 0:00");
         progressSlider = new Slider(0, 100, 0);
         // Handle clicks and drags: when user presses, stop automatic updates; on release, seek
-        progressSlider.setOnMousePressed(e -> isSeeking = true);
+    progressSlider.setOnMousePressed(e -> isSeeking = true);
         progressSlider.setOnMouseReleased(e -> {
             isSeeking = false;
             seekToPosition();
@@ -406,7 +416,7 @@ public class MainWindow {
         progressSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             // If user is seeking we update only the label; actual seek happens on mouse release
             if (isSeeking) {
-                long durationUs = audioPlayer.getDuration();
+                long durationUs = controller.getDuration();
                 long posUs = (long) (durationUs * (newVal.doubleValue() / 100.0));
                 timeLabel.setText(formatTime(posUs / 1000000) + " / " + formatTime(durationUs / 1000000));
             }
@@ -478,14 +488,14 @@ public class MainWindow {
         volumeBox.setAlignment(Pos.CENTER);
         Label volumeLabel = new Label("🔊");
         volumeSlider = new Slider(0, 1, 0.5);
-        volumeSlider.valueProperty().addListener((obs, oldVal, newVal)
-                -> audioPlayer.setVolume(newVal.floatValue()));
+    volumeSlider.valueProperty().addListener((obs, oldVal, newVal)
+        -> controller.setVolume(newVal.floatValue()));
         volumeSlider.getStyleClass().add("volume-slider");
         volumeSlider.setId("volume-slider");
         volumeSlider.setAccessibleText("Volume");
 
         // Update visual fill for volume slider (value is 0.0-1.0)
-        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> setSliderFill(volumeSlider, newVal.doubleValue() * 100.0));
+    volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> setSliderFill(volumeSlider, newVal.doubleValue() * 100.0));
         setSliderFill(progressSlider, progressSlider.getValue());
         setSliderFill(volumeSlider, volumeSlider.getValue() * 100.0);
 
@@ -505,7 +515,7 @@ public class MainWindow {
      * Setup listeners for audio player events
      */
     private void setupAudioPlayerListeners() {
-        audioPlayer.addListener(new AudioPlayer.AudioPlayerListener() {
+        controller.addListener(new AudioPlayer.AudioPlayerListener() {
             @Override
             public void onSongChanged(Song song) {
                 Platform.runLater(() -> {
@@ -562,11 +572,12 @@ public class MainWindow {
                         } else {
                             currentList = songListView.getItems();
                         }
-                        if (currentSongIndex >= 0 && currentSongIndex < currentList.size()) {
-                            Song s = currentList.get(currentSongIndex);
+                        int idx = controller.getCurrentSongIndex();
+                        if (idx >= 0 && idx < currentList.size()) {
+                            Song s = currentList.get(idx);
                             if (s != null) {
-                                audioPlayer.seek(0);
-                                audioPlayer.playSong(s);
+                                controller.seek(0);
+                                controller.playSong(s);
                             }
                         }
                     } else {
@@ -592,6 +603,10 @@ public class MainWindow {
     private void refreshSongList() {
         songListView.getItems().clear();
         songListView.getItems().addAll(musicLibrary.getAllSongs());
+        // Keep controller in sync with the currently-shown list
+        if (controller != null) {
+            controller.setCurrentList(songListView.getItems());
+        }
     }
 
     /*
@@ -661,6 +676,9 @@ public class MainWindow {
 
         // Configure song list for library mode (shared factory)
         setCommonSongCellFactory();
+        if (controller != null) {
+            controller.setCurrentList(songListView.getItems());
+        }
     }
 
     /*
@@ -669,6 +687,9 @@ public class MainWindow {
     private void configureSongListForPlaylistMode() {
         // Use the shared/common cell factory so playlist mode shows the same menu as library mode
         setCommonSongCellFactory();
+        if (controller != null && currentPlaylist != null) {
+            controller.setCurrentPlaylist(currentPlaylist);
+        }
     }
 
     /**
@@ -841,17 +862,7 @@ public class MainWindow {
         if (song == null) {
             return;
         }
-        audioPlayer.playSong(song);
-
-        // Update current list and index
-        List<Song> currentList;
-        if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
-            currentList = currentPlaylist.getSongs();
-        } else {
-            currentList = songListView.getItems();
-        }
-
-        currentSongIndex = currentList.indexOf(song);
+        controller.playSong(song);
         // Select in UI
         songListView.getSelectionModel().select(song);
     }
@@ -1022,20 +1033,15 @@ public class MainWindow {
      * Toggle play/pause state of the audio player
      */
     private void togglePlayPause() {
-        if (audioPlayer.isPlaying()) {
-            audioPlayer.pause();
-        } else if (audioPlayer.isPaused()) {
-            audioPlayer.resume();
-        }
+        controller.togglePlayPause();
     }
 
     /*
      * Stop playback and reset UI state
      */
     private void stop() {
-        audioPlayer.stop();
+        controller.stop();
         // Reset UI state
-        currentSongIndex = -1;
         songListView.getSelectionModel().clearSelection();
         progressSlider.setValue(0);
         nowPlayingLabel.setText("No song playing");
@@ -1045,30 +1051,10 @@ public class MainWindow {
      * Play the next song in the current list (playlist or library)
      */
     private void playNext() {
-        List<Song> currentList;
-        if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
-            currentList = currentPlaylist.getSongs();
-        } else {
-            currentList = songListView.getItems();
-        }
-
-        if (currentList == null || currentList.isEmpty()) {
-            return;
-        }
-        int nextIndex = currentSongIndex >= 0 ? currentSongIndex + 1 : songListView.getSelectionModel().getSelectedIndex();
-        if (nextIndex < 0) {
-            nextIndex = 0;
-        }
-        if (nextIndex < 0 || nextIndex >= currentList.size()) {
-            // reached end — stop playback
-            audioPlayer.stop();
-            return;
-        }
-
-        Song nextSong = currentList.get(nextIndex);
-        if (nextSong != null) {
-            currentSongIndex = nextIndex;
-            playSong(nextSong);
+        controller.playNext();
+        Song s = controller.getCurrentSong();
+        if (s != null) {
+            songListView.getSelectionModel().select(s);
         }
     }
 
@@ -1076,36 +1062,10 @@ public class MainWindow {
      * Play the previous song in the current list (playlist or library). If at the start, restart the current track.
      */
     private void playPrevious() {
-        List<Song> currentList;
-        if (currentPlaylist != null && currentPlaylist.getSongCount() > 0) {
-            currentList = currentPlaylist.getSongs();
-        } else {
-            currentList = songListView.getItems();
-        }
-
-        if (currentList == null || currentList.isEmpty()) {
-            return;
-        }
-        int prevIndex;
-        if (currentSongIndex >= 0) {
-            prevIndex = currentSongIndex - 1;
-        } else {
-            prevIndex = songListView.getSelectionModel().getSelectedIndex();
-        }
-        if (prevIndex < 0) {
-            // at start — restart current track
-            if (currentSongIndex >= 0 && currentSongIndex < currentList.size()) {
-                Song current = currentList.get(currentSongIndex);
-                audioPlayer.seek(0);
-                audioPlayer.playSong(current);
-            }
-            return;
-        }
-
-        Song prevSong = currentList.get(prevIndex);
-        if (prevSong != null) {
-            currentSongIndex = prevIndex;
-            playSong(prevSong);
+        controller.playPrevious();
+        Song s = controller.getCurrentSong();
+        if (s != null) {
+            songListView.getSelectionModel().select(s);
         }
     }
 
@@ -1115,12 +1075,12 @@ public class MainWindow {
     private void seekToPosition() {
         try {
             double percent = progressSlider.getValue();
-            long durationUs = audioPlayer.getDuration();
+            long durationUs = controller.getDuration();
             if (durationUs <= 0) {
                 return;
             }
             long targetUs = (long) (durationUs * (percent / 100.0));
-            audioPlayer.seek(targetUs);
+            controller.seek(targetUs);
         } catch (Exception e) {
             // silent fail — individual audio backends may not support seeking
         }
@@ -1280,7 +1240,9 @@ public class MainWindow {
         this.currentPlaylist = playlist;
         songListView.getItems().clear();
         songListView.getItems().addAll(playlist.getSongs());
-        currentSongIndex = -1;
+        if (controller != null) {
+            controller.setCurrentPlaylist(playlist);
+        }
         // Configure song list for playlist actions (remove/reorder)
         configureSongListForPlaylistMode();
     }
