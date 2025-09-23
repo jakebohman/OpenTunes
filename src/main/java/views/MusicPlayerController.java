@@ -21,7 +21,7 @@ public class MusicPlayerController {
     // Playback state
     private Playlist currentPlaylist; // null = library / arbitrary list mode
     private List<Song> currentList; // reference to the current list shown in the UI
-    private int currentSongIndex = -1;
+    private int currentSongIndex = -1; // index within currentList or currentPlaylist, -1 if none
 
     public MusicPlayerController(MusicLibrary musicLibrary) {
         this.musicLibrary = musicLibrary;
@@ -183,7 +183,7 @@ public class MusicPlayerController {
      */
     public void shutdown() {
         try {
-            audioPlayer.stop();
+            audioPlayer.shutdown();
         } catch (Exception ignored) {
         }
     }

@@ -19,17 +19,13 @@ import models.Playlist;
 public class PlaylistIO {
 
     private static final ObjectMapper MAPPER = createMapper(); // Jackson ObjectMapper with JavaTimeModule registered
-    private static final String DEFAULT_DIR = System.getProperty("user.home") + File.separator + ".spotify-clone"; // Default directory for storing app data
-    private static final String PLAYLIST_FILE = DEFAULT_DIR + File.separator + "playlists.json"; // Playlist file path
+    // Persist playlists alongside the project file `music-library.json` in the working directory
+    private static final String PLAYLIST_FILE = "playlists.json";
 
     /*
      * Load playlists from the JSON file, returning an empty list if the file doesn't exist or is unreadable
      */
     public static List<Playlist> loadPlaylists() throws IOException {
-        Path dir = Path.of(DEFAULT_DIR);
-        if (!Files.exists(dir)) {
-            return new ArrayList<>();
-        }
         File file = new File(PLAYLIST_FILE);
         if (!file.exists()) {
             return new ArrayList<>();
@@ -42,10 +38,6 @@ public class PlaylistIO {
      * Save the given list of playlists to the JSON file, creating directories as needed
      */
     public static void savePlaylists(List<Playlist> playlists) throws IOException {
-        Path dir = Path.of(DEFAULT_DIR);
-        if (!Files.exists(dir)) {
-            Files.createDirectories(dir);
-        }
         File file = new File(PLAYLIST_FILE);
         MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, playlists);
     }

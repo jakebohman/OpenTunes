@@ -1,4 +1,5 @@
 target
-music-library.json
 .vscode
 open-tunes.properties
+playlists.json
+music-library.json

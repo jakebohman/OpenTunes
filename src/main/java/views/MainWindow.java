@@ -65,6 +65,7 @@ public class MainWindow {
     private Slider progressSlider; // slider for song progress
     private Slider volumeSlider; // slider for volume
     private Label volumeLabel; // label for volume icon
+    private volatile boolean adjustingVolume = false; // true when programmatically updating volume slider to avoid feedback loops
     private Button playPauseButton; // play/pause button
     private Button stopButton; // stop button
     private Button previousButton; // previous button
@@ -85,13 +86,13 @@ public class MainWindow {
      */
     public MainWindow(Stage primaryStage) {
         this.primaryStage = primaryStage;
-    this.musicLibrary = MusicLibrary.getInstance();
-    this.controller = new MusicPlayerController(this.musicLibrary);
+        this.musicLibrary = MusicLibrary.getInstance();
+        this.controller = new MusicPlayerController(this.musicLibrary);
         // Load persisted library and playlists at startup
         try {
             MusicLibraryIO.loadLibrary(musicLibrary);
             musicLibrary.getAllPlaylists().addAll(PlaylistIO.loadPlaylists());
-        } catch (Exception e) {
+        } catch (IOException e) {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Load Error");
             alert.setHeaderText("Failed to load library or playlists");
@@ -120,8 +121,8 @@ public class MainWindow {
         SplitPane centerPane = createCenterPane();
         mainLayout.setCenter(centerPane);
 
-    // After UI lists are created, inform controller about current list (library mode)
-    controller.setCurrentList(songListView.getItems());
+        // After UI lists are created, inform controller about current list (library mode)
+        controller.setCurrentList(songListView.getItems());
 
         // Create bottom controls
         VBox bottomControls = createBottomControls();
@@ -422,7 +423,7 @@ public class MainWindow {
         timeLabel = new Label("0:00 / 0:00");
         progressSlider = new Slider(0, 100, 0);
         // Handle clicks and drags: when user presses, stop automatic updates; on release, seek
-    progressSlider.setOnMousePressed(e -> isSeeking = true);
+        progressSlider.setOnMousePressed(e -> isSeeking = true);
         progressSlider.setOnMouseReleased(e -> {
             isSeeking = false;
             seekToPosition();
@@ -503,6 +504,10 @@ public class MainWindow {
         this.volumeLabel = new Label("🔊");
         volumeSlider = new Slider(0, 1, 0.5);
         volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            // Ignore changes that originate from programmatic updates
+            if (adjustingVolume) {
+                return;
+            }
             float v = newVal.floatValue();
             controller.setVolume(v);
             // update icon: muted when exactly zero
@@ -517,11 +522,11 @@ public class MainWindow {
         volumeSlider.setAccessibleText("Volume");
 
         // Update visual fill for volume slider (value is 0.0-1.0)
-    volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> setSliderFill(volumeSlider, newVal.doubleValue() * 100.0));
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> setSliderFill(volumeSlider, newVal.doubleValue() * 100.0));
         setSliderFill(progressSlider, progressSlider.getValue());
         setSliderFill(volumeSlider, volumeSlider.getValue() * 100.0);
 
-    volumeBox.getChildren().addAll(volumeLabel, volumeSlider);
+        volumeBox.getChildren().addAll(volumeLabel, volumeSlider);
 
         // Combine all controls
         HBox allControls = new HBox(20);
@@ -568,7 +573,20 @@ public class MainWindow {
 
             @Override
             public void onVolumeChanged(float volume) {
-                Platform.runLater(() -> volumeSlider.setValue(volume));
+                Platform.runLater(() -> {
+                    adjustingVolume = true;
+                    try {
+                        volumeSlider.setValue(volume);
+                        // also update icon when programmatically changing
+                        if (volume <= 0.0001f) {
+                            volumeLabel.setText("🔇");
+                        } else {
+                            volumeLabel.setText("🔊");
+                        }
+                    } finally {
+                        adjustingVolume = false;
+                    }
+                });
             }
 
             @Override
@@ -1164,7 +1182,7 @@ public class MainWindow {
                         refreshSongList();
                         try {
                             PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                        } catch (Exception ex) {
+                        } catch (IOException ex) {
                             Alert err = new Alert(Alert.AlertType.ERROR);
                             err.setTitle("Save Error");
                             err.setHeaderText("Failed to persist playlists");
@@ -1204,7 +1222,7 @@ public class MainWindow {
                         refreshSongList();
                         try {
                             PlaylistIO.savePlaylists(musicLibrary.getAllPlaylists());
-                        } catch (Exception ex) {
+                        } catch (IOException ex) {
                             Alert err = new Alert(Alert.AlertType.ERROR);
                             err.setTitle("Save Error");
                             err.setHeaderText("Failed to persist playlists");

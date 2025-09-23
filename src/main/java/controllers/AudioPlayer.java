@@ -4,6 +4,10 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
@@ -31,8 +35,15 @@ public class AudioPlayer {
 
     private List<AudioPlayerListener> listeners; // registered event listeners for playback events
     private Clip audioClip; // Java Sound Clip for low-latency playback
-    private MediaPlayer mediaPlayerFallback; // JavaFX MediaPlayer for broader format support (used if Clip fails)
-    private boolean usingMediaFallback = false; // whether currently using MediaPlayer fallback
+    private volatile MediaPlayer mediaPlayerFallback; // JavaFX MediaPlayer for broader format support (used if Clip fails)
+    private volatile boolean usingMediaFallback = false; // whether currently using MediaPlayer fallback
+    // Scheduler for position tracking to avoid manual Thread and Thread.sleep usage
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "AudioPlayer-PositionTracker");
+        t.setDaemon(true);
+        return t;
+    });
+    private ScheduledFuture<?> positionTask;
 
     /*
      * Constructor
@@ -148,8 +159,15 @@ public class AudioPlayer {
         
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null && playbackState == PlaybackState.PLAYING) {
-            mediaPlayerFallback.pause();
-            pausePosition = (long) (mediaPlayerFallback.getCurrentTime().toMillis() * 1000);
+            final MediaPlayer mp = mediaPlayerFallback; // capture to avoid races
+            try {
+                if (mp != null) {
+                    mp.pause();
+                    try {
+                        pausePosition = (long) (mp.getCurrentTime().toMillis() * 1000);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
             playbackState = PlaybackState.PAUSED;
             notifyPlayStateChanged(playbackState);
         }
@@ -171,12 +189,16 @@ public class AudioPlayer {
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null && playbackState == PlaybackState.PAUSED) {
             final long resumePosUs = pausePosition;
+            final MediaPlayer mp = mediaPlayerFallback; // capture to avoid races where field is nulled on stop()
             Platform.runLater(() -> {
-                mediaPlayerFallback.seek(javafx.util.Duration.millis(resumePosUs / 1000.0));
-                mediaPlayerFallback.play();
-                playbackState = PlaybackState.PLAYING;
-                notifyPlayStateChanged(playbackState);
-                startPositionTracking();
+                try {
+                    if (mp == null) return;
+                    mp.seek(javafx.util.Duration.millis(resumePosUs / 1000.0));
+                    mp.play();
+                    playbackState = PlaybackState.PLAYING;
+                    notifyPlayStateChanged(playbackState);
+                    startPositionTracking();
+                } catch (Exception ignored) {}
             });
         }
     }
@@ -212,6 +234,14 @@ public class AudioPlayer {
             }
         }
 
+        // cancel position tracking task if active
+        if (positionTask != null) {
+            try {
+                positionTask.cancel(true);
+            } catch (Exception ignored) {}
+            positionTask = null;
+        }
+
         playbackState = PlaybackState.STOPPED;
         pausePosition = 0;
         notifyPlayStateChanged(playbackState);
@@ -232,7 +262,12 @@ public class AudioPlayer {
         
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null) {
-            Platform.runLater(() -> mediaPlayerFallback.seek(javafx.util.Duration.millis(position / 1000.0)));
+            final MediaPlayer mp = mediaPlayerFallback; // capture reference
+            Platform.runLater(() -> {
+                try {
+                    if (mp != null) mp.seek(javafx.util.Duration.millis(position / 1000.0));
+                } catch (Exception ignored) {}
+            });
             pausePosition = position;
         }
     }
@@ -266,8 +301,13 @@ public class AudioPlayer {
 
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null) {
+            final MediaPlayer mp = mediaPlayerFallback; // capture to avoid NPE if field is nulled before runnable runs
             try {
-                Platform.runLater(() -> mediaPlayerFallback.setVolume(volume));
+                Platform.runLater(() -> {
+                    try {
+                        if (mp != null) mp.setVolume(volume);
+                    } catch (Exception ignored) {}
+                });
             } catch (Exception ignored) {}
         }
     }
@@ -276,46 +316,50 @@ public class AudioPlayer {
      * Spawn thread to track playback position and notify listeners
      */
     private void startPositionTracking() {
-        Thread positionThread = new Thread(() -> {
-            while (playbackState == PlaybackState.PLAYING) {
-                try {
-                    // If using Clip
-                    if (audioClip != null && audioClip.isRunning()) {
-                        long position = audioClip.getMicrosecondPosition();
-                        long duration = audioClip.getMicrosecondLength();
-                        notifyPositionChanged(position, duration);
-                        // Check if playback has reached near the end
-                        if (position >= duration - 100000) {
-                            playbackState = PlaybackState.STOPPED;
-                            notifyPlayStateChanged(playbackState);
-                            notifySongEnded();
-                            break;
-                        }
-                    }
-                    
-                    // If using MediaPlayer fallback
-                    else if (usingMediaFallback && mediaPlayerFallback != null) {
-                        javafx.util.Duration current = mediaPlayerFallback.getCurrentTime();
-                        javafx.util.Duration total = mediaPlayerFallback.getTotalDuration();
-                        long posUs = (long) (current.toMillis() * 1000);
-                        long durUs = total == null || total.toMillis() == 0 ? 0 : (long) (total.toMillis() * 1000);
-                        notifyPositionChanged(posUs, durUs);
-                        // Check if playback has reached near the end
-                        if (total != null && current.greaterThanOrEqualTo(total.subtract(javafx.util.Duration.millis(100)))) {
-                            playbackState = PlaybackState.STOPPED;
-                            notifyPlayStateChanged(playbackState);
-                            notifySongEnded();
-                            break;
-                        }
-                    }
+        // cancel previous task if any
+        if (positionTask != null) {
+            try { positionTask.cancel(true); } catch (Exception ignored) {}
+            positionTask = null;
+        }
 
-                    // Check again every 100ms until playback stops
-                    Thread.sleep(100);
-                } catch (InterruptedException e) { break; } catch (Exception ignored) {}
-            }
-        });
-        positionThread.setDaemon(true);
-        positionThread.start();
+        positionTask = scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (playbackState != PlaybackState.PLAYING) return;
+
+                // If using Clip
+                if (audioClip != null && audioClip.isRunning()) {
+                    long position = audioClip.getMicrosecondPosition();
+                    long duration = audioClip.getMicrosecondLength();
+                    notifyPositionChanged(position, duration);
+                    // Check if playback has reached near the end
+                    if (position >= duration - 100000) {
+                        playbackState = PlaybackState.STOPPED;
+                        notifyPlayStateChanged(playbackState);
+                        notifySongEnded();
+                    }
+                }
+
+                // If using MediaPlayer fallback
+                else if (usingMediaFallback && mediaPlayerFallback != null) {
+                    final MediaPlayer mp = mediaPlayerFallback; // capture local ref
+                    if (mp != null) {
+                        try {
+                            javafx.util.Duration current = mp.getCurrentTime();
+                            javafx.util.Duration total = mp.getTotalDuration();
+                            long posUs = (long) (current.toMillis() * 1000);
+                            long durUs = total == null || total.toMillis() == 0 ? 0 : (long) (total.toMillis() * 1000);
+                            notifyPositionChanged(posUs, durUs);
+                            // Check if playback has reached near the end
+                            if (total != null && current.greaterThanOrEqualTo(total.subtract(javafx.util.Duration.millis(100)))) {
+                                playbackState = PlaybackState.STOPPED;
+                                notifyPlayStateChanged(playbackState);
+                                notifySongEnded();
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+            } catch (Exception ignored) {}
+        }, 0, 100, TimeUnit.MILLISECONDS);
     }
 
     /*
@@ -352,10 +396,13 @@ public class AudioPlayer {
 
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null) {
-            try {
-                javafx.util.Duration cur = mediaPlayerFallback.getCurrentTime();
-                return (long) (cur.toMillis() * 1000);
-            } catch (Exception ignored) {}
+            final MediaPlayer mp = mediaPlayerFallback; // capture
+            if (mp != null) {
+                try {
+                    javafx.util.Duration cur = mp.getCurrentTime();
+                    return (long) (cur.toMillis() * 1000);
+                } catch (Exception ignored) {}
+            }
         }
         
         return 0;
@@ -372,13 +419,16 @@ public class AudioPlayer {
 
         // If using MediaPlayer fallback
         else if (usingMediaFallback && mediaPlayerFallback != null) {
-            try {
-                javafx.util.Duration total = mediaPlayerFallback.getTotalDuration();
-                if (total == null || total.toMillis() <= 0) {
-                    return 0;
-                }
-                return (long) (total.toMillis() * 1000);
-            } catch (Exception ignored) {}
+            final MediaPlayer mp = mediaPlayerFallback; // capture
+            if (mp != null) {
+                try {
+                    javafx.util.Duration total = mp.getTotalDuration();
+                    if (total == null || total.toMillis() <= 0) {
+                        return 0;
+                    }
+                    return (long) (total.toMillis() * 1000);
+                } catch (Exception ignored) {}
+            }
         }
 
         return 0;
@@ -425,5 +475,23 @@ public class AudioPlayer {
         for (AudioPlayerListener listener : listeners) {
             listener.onError(error);
         }
+    }
+
+    /**
+     * Shutdown and release resources used by the AudioPlayer (scheduler, media player)
+     */
+    public void shutdown() {
+        try {
+            stop();
+        } catch (Exception ignored) {}
+        try {
+            if (positionTask != null) {
+                positionTask.cancel(true);
+                positionTask = null;
+            }
+        } catch (Exception ignored) {}
+        try {
+            scheduler.shutdownNow();
+        } catch (Exception ignored) {}
     }
 }
