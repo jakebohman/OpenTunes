@@ -176,4 +176,15 @@ public class MusicPlayerController {
         this.currentSongIndex = -1;
         return true;
     }
+
+    /**
+     * Shutdown playback and release resources. Call this when the application is exiting
+     * to ensure any background playback threads are stopped.
+     */
+    public void shutdown() {
+        try {
+            audioPlayer.stop();
+        } catch (Exception ignored) {
+        }
+    }
 }

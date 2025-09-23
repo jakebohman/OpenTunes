@@ -158,8 +158,21 @@ public class MainWindow {
                     () -> playPrevious());
         } catch (Exception ignored) {
         }
-        // On close, persist library and playlists and save config
+        // On close, stop playback threads, persist library and playlists and save config
         primaryStage.setOnCloseRequest(evt -> {
+            // Ensure audio/background threads are stopped cleanly
+            if (controller != null) {
+                try {
+                    controller.shutdown();
+                } catch (Exception e) {
+                    Alert err = new Alert(Alert.AlertType.ERROR);
+                    err.setTitle("Shutdown Error");
+                    err.setHeaderText("Failed to stop audio player");
+                    err.setContentText(e.getMessage());
+                    err.showAndWait();
+                }
+            }
+
             try {
                 MusicLibraryIO.saveLibrary(musicLibrary);
             } catch (IOException e) {
