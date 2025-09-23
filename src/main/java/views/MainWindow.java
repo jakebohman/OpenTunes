@@ -64,6 +64,7 @@ public class MainWindow {
     private Label timeLabel; // label showing current time / total duration
     private Slider progressSlider; // slider for song progress
     private Slider volumeSlider; // slider for volume
+    private Label volumeLabel; // label for volume icon
     private Button playPauseButton; // play/pause button
     private Button stopButton; // stop button
     private Button previousButton; // previous button
@@ -486,10 +487,18 @@ public class MainWindow {
         // Volume control
         HBox volumeBox = new HBox(5);
         volumeBox.setAlignment(Pos.CENTER);
-        Label volumeLabel = new Label("🔊");
+        this.volumeLabel = new Label("🔊");
         volumeSlider = new Slider(0, 1, 0.5);
-    volumeSlider.valueProperty().addListener((obs, oldVal, newVal)
-        -> controller.setVolume(newVal.floatValue()));
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            float v = newVal.floatValue();
+            controller.setVolume(v);
+            // update icon: muted when exactly zero
+            if (v <= 0.0001f) {
+                volumeLabel.setText("🔇");
+            } else {
+                volumeLabel.setText("🔊");
+            }
+        });
         volumeSlider.getStyleClass().add("volume-slider");
         volumeSlider.setId("volume-slider");
         volumeSlider.setAccessibleText("Volume");
@@ -499,7 +508,7 @@ public class MainWindow {
         setSliderFill(progressSlider, progressSlider.getValue());
         setSliderFill(volumeSlider, volumeSlider.getValue() * 100.0);
 
-        volumeBox.getChildren().addAll(volumeLabel, volumeSlider);
+    volumeBox.getChildren().addAll(volumeLabel, volumeSlider);
 
         // Combine all controls
         HBox allControls = new HBox(20);
