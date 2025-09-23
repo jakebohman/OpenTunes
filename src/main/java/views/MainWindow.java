@@ -750,6 +750,11 @@ public class MainWindow {
                 // Only show playlists that actually contain this song
                 List<Playlist> allPlaylists = musicLibrary.getAllPlaylists();
                 if (allPlaylists == null || allPlaylists.isEmpty()) {
+                    Alert info = new Alert(Alert.AlertType.INFORMATION);
+                    info.setTitle("No Playlists");
+                    info.setHeaderText("No playlists available");
+                    info.setContentText("There are no playlists to remove songs from.");
+                    info.showAndWait();
                     return;
                 }
                 List<Playlist> containing = new java.util.ArrayList<>();
@@ -1014,6 +1019,15 @@ public class MainWindow {
             return;
         }
         List<Playlist> playlists = musicLibrary.getAllPlaylists();
+        if (playlists == null || playlists.isEmpty()) {
+            Alert info = new Alert(Alert.AlertType.INFORMATION);
+            info.setTitle("No Playlists");
+            info.setHeaderText("No playlists available");
+            info.setContentText("There are no playlists to add songs to. Create a playlist first.");
+            info.showAndWait();
+            return;
+        }
+
         ChoiceDialog<Playlist> dialog = new ChoiceDialog<>(null, playlists);
         dialog.setTitle("Add to Playlist");
         dialog.setHeaderText("Choose a playlist to add the song to");
